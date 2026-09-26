@@ -1,18 +1,21 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 3 (complete) | Next: Phase 4
+## Current Phase: 4 (complete) | Next: Phase 5
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
 - Phase 2: full REST API (users, tasks, subtasks, attachments, profile, activity logging)
-- Phase 3: frontend shell
-  - AuthContext + useAuth hook; axios client (withCredentials)
-  - Landing page: navbar, hero, 6 feature cards, how-it-works, contact form+toast, footer
-  - Login page: validation, role-based redirect, deactivated-user error
-  - DashboardLayout: role-coloured sidebar (all tabs routed), topbar, profile dropdown, mobile hamburger
-  - ProtectedRoute: unauthenticated → /login; wrong role → /unauthorized
-  - All 22 dashboard routes wired (Admin 7, HR 6, Mentor 6, Mentee 5) — placeholders for Phase 4+
-  - /unauthorized and 404 pages
+- Phase 3: frontend shell — landing, login, DashboardLayout, ProtectedRoute, 22 routes wired
+- Phase 4: Admin dashboard (all 7 tabs, fully functional)
+  - Shared components: Button, ConfirmModal, StatusBadge
+  - Overview: stat cards (users by role + tasks), recent-users table, click-to-navigate
+  - Users: table with search/role filter, View/Edit/Deactivate/Activate/Delete actions + confirmation modals
+  - Create User: form with conditional fields (designation for MENTOR, mentor dropdown for MENTEE), no-mentor warning + link
+  - Edit User: prefilled form, mentor reassignment for MENTEE, role shown read-only
+  - User Detail: profile info, mentor link for MENTEE, mentees list for MENTOR, tasks table
+  - All Tasks: read-only table, filters by status/creator/assignee, overdue badge
+  - My Profile: view info, edit name+phone, change password
+  - Mentor-with-mentees block: clear error shown on deactivate/delete attempt
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)
