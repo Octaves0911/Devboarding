@@ -5,6 +5,11 @@ const cors = require('cors');
 const path = require('path');
 
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const taskRoutes = require('./routes/tasks');
+const subtaskRoutes = require('./routes/subtasks');
+const attachmentRoutes = require('./routes/attachments');
+const profileRoutes = require('./routes/profile');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -21,6 +26,11 @@ app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
 
 // Routes
 app.use('/api', authRoutes);
+app.use('/api', userRoutes);
+app.use('/api', taskRoutes);
+app.use('/api', subtaskRoutes);
+app.use('/api', attachmentRoutes);
+app.use('/api', profileRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
