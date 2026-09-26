@@ -1,0 +1,86 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          Int      @id @default(autoincrement())
+  name        String
+  email       String   @unique
+  passwordHash String
+  role        String   // ADMIN | HR | MENTOR | MENTEE
+  phone       String?
+  department  String?
+  designation String?
+  joiningDate DateTime?
+  mentorId    Int?
+  mentor      User?    @relation("MentorMentees", fields: [mentorId], references: [id])
+  mentees     User[]   @relation("MentorMentees")
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  tasksCreated   Task[]           @relation("TaskCreator")
+  tasksAssigned  Task[]           @relation("TaskAssignee")
+  attachments    Attachment[]
+  activities     TaskActivity[]
+}
+
+model Task {
+  id             Int       @id @default(autoincrement())
+  title          String
+  description    String
+  priority       String    // LOW | MEDIUM | HIGH
+  dueDate        DateTime
+  status         String    @default("TODO") // TODO | IN_PROGRESS | DONE
+  createdById    Int
+  createdBy      User      @relation("TaskCreator", fields: [createdById], references: [id])
+  assigneeId     Int
+  assignee       User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  completionNote String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  subtasks    Subtask[]
+  attachments Attachment[]
+  activities  TaskActivity[]
+}
+
+model Subtask {
+  id     Int     @id @default(autoincrement())
+  taskId Int
+  task   Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  title  String
+  isDone Boolean @default(false)
+  order  Int     @default(0)
+}
+
+model Attachment {
+  id           Int      @id @default(autoincrement())
+  taskId       Int
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  fileName     String
+  filePath     String
+  mimeType     String
+  size         Int
+  uploadedById Int
+  uploadedBy   User     @relation(fields: [uploadedById], references: [id])
+  kind         String   // REFERENCE | SUBMISSION
+  createdAt    DateTime @default(now())
+}
+
+model TaskActivity {
+  id         Int      @id @default(autoincrement())
+  taskId     Int
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId     Int
+  user       User     @relation(fields: [userId], references: [id])
+  action     String
+  fromStatus String?
+  toStatus   String?
+  createdAt  DateTime @default(now())
+}
