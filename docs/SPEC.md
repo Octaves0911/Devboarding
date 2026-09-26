@@ -37,7 +37,7 @@ TaskActivity(id, taskId -> Task cascade, userId -> User, action, fromStatus?, to
 
 # SEED DATA
 Create ONLY one user:
-Admin — email: admin@devborading.com, password: Admin@123
+Admin — email: admin@devboarding.com, password: Admin@123
 
 # PUBLIC PAGES
 
