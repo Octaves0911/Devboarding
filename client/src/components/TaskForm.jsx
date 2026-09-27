@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Trash2, GripVertical, Paperclip, X, Search } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Paperclip, X, Search, Sparkles, RefreshCw, ExternalLink } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import Button from './Button';
@@ -50,15 +50,18 @@ const ROLE_LABELS = { HR: 'HR', MENTOR: 'Mentor', MENTEE: 'Mentee' };
 function AssigneeCheckboxList({ assignees, selected, onChange, error }) {
   const [search, setSearch] = useState('');
 
-  const grouped = ['HR', 'MENTOR', 'MENTEE'].reduce((acc, role) => {
-    const filtered = assignees.filter(
-      (a) =>
-        a.role === role &&
-        (search === '' || a.name.toLowerCase().includes(search.toLowerCase()))
-    );
-    if (filtered.length) acc[role] = filtered;
-    return acc;
-  }, {});
+  const filtered = assignees.filter(
+    (u) => u.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const grouped = Object.entries(
+    filtered.reduce((acc, u) => {
+      const key = u.role;
+      acc[key] = acc[key] ?? [];
+      acc[key].push(u);
+      return acc;
+    }, {})
+  );
 
   function toggle(id) {
     const sid = String(id);
@@ -67,77 +70,78 @@ function AssigneeCheckboxList({ assignees, selected, onChange, error }) {
 
   function toggleGroup(users) {
     const ids = users.map((u) => String(u.id));
-    const allSelected = ids.every((id) => selected.includes(id));
-    if (allSelected) {
+    const allOn = ids.every((id) => selected.includes(id));
+    if (allOn) {
       onChange(selected.filter((id) => !ids.includes(id)));
     } else {
-      const next = new Set([...selected, ...ids]);
-      onChange([...next]);
+      const next = [...selected];
+      ids.forEach((id) => { if (!next.includes(id)) next.push(id); });
+      onChange(next);
     }
   }
 
   return (
-    <div>
+    <div
+      className={`border rounded-lg overflow-hidden ${
+        error ? 'border-red-400' : 'border-gray-300'
+      }`}
+    >
       {/* Search */}
-      <div className="relative mb-1">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50">
+        <Search size={13} className="text-gray-400 shrink-0" />
         <input
           type="text"
-          placeholder="Search assignees…"
+          placeholder="Search people…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
-          className="w-full pl-7 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400"
         />
+        {selected.length > 0 && (
+          <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">
+            {selected.length} selected
+          </span>
+        )}
       </div>
 
-      {/* Selected count */}
-      {selected.length > 0 && (
-        <p className="text-xs text-purple-600 mb-1 font-medium">
-          {selected.length} assignee{selected.length !== 1 ? 's' : ''} selected
-        </p>
-      )}
-
       {/* Groups */}
-      <div
-        className={`border rounded-lg overflow-hidden divide-y divide-gray-100 max-h-60 overflow-y-auto ${
-          error ? 'border-red-400' : 'border-gray-300'
-        }`}
-      >
-        {Object.keys(grouped).length === 0 ? (
-          <p className="px-3 py-4 text-xs text-gray-400 text-center">No assignees found.</p>
+      <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+        {grouped.length === 0 ? (
+          <p className="text-xs text-gray-400 px-4 py-3 text-center">No people found.</p>
         ) : (
-          Object.entries(grouped).map(([role, users]) => {
+          grouped.map(([role, users]) => {
             const groupIds = users.map((u) => String(u.id));
-            const allGroupSelected = groupIds.every((id) => selected.includes(id));
+            const allOn = groupIds.every((id) => selected.includes(id));
             return (
               <div key={role}>
                 {/* Group header */}
-                <div className="flex items-center justify-between px-3 py-1.5 bg-gray-50">
+                <div
+                  className="flex items-center justify-between px-3 py-1.5 bg-gray-50 cursor-pointer hover:bg-gray-100"
+                  onClick={() => toggleGroup(users)}
+                >
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                     {ROLE_LABELS[role] ?? role}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(users)}
-                    className="text-xs text-purple-600 hover:underline"
-                  >
-                    {allGroupSelected ? 'Deselect all' : 'Select all'}
-                  </button>
+                  <span className="text-xs text-purple-600">
+                    {allOn ? 'Deselect all' : 'Select all'}
+                  </span>
                 </div>
-                {/* Members */}
                 {users.map((u) => (
                   <label
                     key={u.id}
-                    className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-purple-50 text-sm"
+                    className="flex items-center gap-3 px-4 py-2 hover:bg-purple-50 cursor-pointer"
                   >
                     <input
                       type="checkbox"
                       checked={selected.includes(String(u.id))}
                       onChange={() => toggle(u.id)}
-                      className="accent-purple-600 w-3.5 h-3.5 shrink-0"
+                      className="w-4 h-4 rounded accent-purple-600"
                     />
-                    <span className="text-gray-800">{u.name}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{u.name}</p>
+                      {u.email && (
+                        <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                      )}
+                    </div>
                   </label>
                 ))}
               </div>
@@ -152,40 +156,43 @@ function AssigneeCheckboxList({ assignees, selected, onChange, error }) {
 function AssigneeRadioList({ assignees, selected, onChange, error }) {
   const [search, setSearch] = useState('');
 
-  const grouped = ['HR', 'MENTOR', 'MENTEE'].reduce((acc, role) => {
-    const filtered = assignees.filter(
-      (a) =>
-        a.role === role &&
-        (search === '' || a.name.toLowerCase().includes(search.toLowerCase()))
-    );
-    if (filtered.length) acc[role] = filtered;
-    return acc;
-  }, {});
+  const filtered = assignees.filter(
+    (u) => u.name.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const grouped = Object.entries(
+    filtered.reduce((acc, u) => {
+      const key = u.role;
+      acc[key] = acc[key] ?? [];
+      acc[key].push(u);
+      return acc;
+    }, {})
+  );
 
   return (
-    <div>
+    <div
+      className={`border rounded-lg overflow-hidden ${
+        error ? 'border-red-400' : 'border-gray-300'
+      }`}
+    >
       {/* Search */}
-      <div className="relative mb-1">
-        <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 bg-gray-50">
+        <Search size={13} className="text-gray-400 shrink-0" />
         <input
           type="text"
-          placeholder="Search assignees…"
+          placeholder="Search people…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
-          className="w-full pl-7 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          className="flex-1 text-sm bg-transparent outline-none placeholder-gray-400"
         />
       </div>
 
-      <div
-        className={`border rounded-lg overflow-hidden divide-y divide-gray-100 max-h-60 overflow-y-auto ${
-          error ? 'border-red-400' : 'border-gray-300'
-        }`}
-      >
-        {Object.keys(grouped).length === 0 ? (
-          <p className="px-3 py-4 text-xs text-gray-400 text-center">No assignees found.</p>
+      {/* Groups */}
+      <div className="max-h-52 overflow-y-auto divide-y divide-gray-100">
+        {grouped.length === 0 ? (
+          <p className="text-xs text-gray-400 px-4 py-3 text-center">No people found.</p>
         ) : (
-          Object.entries(grouped).map(([role, users]) => (
+          grouped.map(([role, users]) => (
             <div key={role}>
               <div className="px-3 py-1.5 bg-gray-50">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -195,17 +202,22 @@ function AssigneeRadioList({ assignees, selected, onChange, error }) {
               {users.map((u) => (
                 <label
                   key={u.id}
-                  className="flex items-center gap-2.5 px-3 py-2 cursor-pointer hover:bg-purple-50 text-sm"
+                  className="flex items-center gap-3 px-4 py-2 hover:bg-purple-50 cursor-pointer"
                 >
                   <input
                     type="radio"
-                    name="assigneeRadio"
+                    name="assignee"
                     value={String(u.id)}
                     checked={selected === String(u.id)}
                     onChange={() => onChange(String(u.id))}
-                    className="accent-purple-600 w-3.5 h-3.5 shrink-0"
+                    className="w-4 h-4 accent-purple-600"
                   />
-                  <span className="text-gray-800">{u.name}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">{u.name}</p>
+                    {u.email && (
+                      <p className="text-xs text-gray-400 truncate">{u.email}</p>
+                    )}
+                  </div>
                 </label>
               ))}
             </div>
@@ -216,21 +228,369 @@ function AssigneeRadioList({ assignees, selected, onChange, error }) {
   );
 }
 
-/**
- * TaskForm — shared create/edit form.
- *
- * Props:
- *   assignees  { id, name, role }[]   — list shown in the picker (role-scoped by caller)
- *   task       object | null          — pre-fill for edit mode
- *   onSuccess  (task|tasks) => void   — called after successful create/update
- *   onCancel   () => void | null      — optional back/cancel handler
- *
- * Create mode: multi-select checkboxes (Bug 1). One task copy per assignee (Bug 3).
- * Edit mode:   single-select radio    (Bug 4). Reassign resets status/subtasks (Bug 4).
- * Enter key on any input except description does NOT submit the form (Bug 2).
- */
+// ── AI Preview Card — one editable task ─────────────────────────────────────
+function AITaskCard({ task, index, onChange, onRemove }) {
+  const [newSubtask, setNewSubtask] = useState('');
+
+  function set(field, value) {
+    onChange(index, { ...task, [field]: value });
+  }
+
+  function addSubtask() {
+    const s = newSubtask.trim();
+    if (!s) return;
+    if ((task.subtasks || []).length >= 6) {
+      toast.error('Maximum 6 subtasks per task.');
+      return;
+    }
+    set('subtasks', [...(task.subtasks || []), s]);
+    setNewSubtask('');
+  }
+
+  function removeSubtask(i) {
+    set('subtasks', task.subtasks.filter((_, idx) => idx !== i));
+  }
+
+  function removeResource(i) {
+    set('resources', task.resources.filter((_, idx) => idx !== i));
+  }
+
+  return (
+    <div className="border border-gray-200 rounded-xl p-4 space-y-3 bg-white">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full shrink-0">
+          Task {index + 1}
+        </span>
+        <button
+          type="button"
+          onClick={() => onRemove(index)}
+          className="text-gray-400 hover:text-red-500 p-0.5 shrink-0"
+          title="Remove task"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+
+      {/* Title */}
+      <input
+        type="text"
+        value={task.title}
+        maxLength={120}
+        onChange={(e) => set('title', e.target.value)}
+        placeholder="Task title"
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 font-medium"
+      />
+
+      {/* Description */}
+      <textarea
+        rows={2}
+        value={task.description}
+        onChange={(e) => set('description', e.target.value)}
+        placeholder="Description"
+        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400 resize-y"
+      />
+
+      {/* Priority + Due date */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Priority</label>
+          <select
+            value={task.priority}
+            onChange={(e) => set('priority', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          >
+            <option value="LOW">Low</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="HIGH">High</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Due date</label>
+          <input
+            type="date"
+            value={task.dueDate}
+            onChange={(e) => set('dueDate', e.target.value)}
+            className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+        </div>
+      </div>
+
+      {/* Subtasks */}
+      {(task.subtasks || []).length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-600 mb-1">Subtasks</p>
+          <ul className="space-y-1">
+            {task.subtasks.map((s, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm">
+                <span className="flex-1 text-gray-700 truncate">{s}</span>
+                <button
+                  type="button"
+                  onClick={() => removeSubtask(i)}
+                  className="text-gray-400 hover:text-red-500 shrink-0"
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {/* Add subtask */}
+      {(task.subtasks || []).length < 6 && (
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newSubtask}
+            onChange={(e) => setNewSubtask(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addSubtask(); } }}
+            placeholder="Add subtask…"
+            className="flex-1 px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-400"
+          />
+          <button
+            type="button"
+            onClick={addSubtask}
+            className="text-purple-600 hover:text-purple-800 text-xs font-medium px-2"
+          >
+            Add
+          </button>
+        </div>
+      )}
+
+      {/* Resources */}
+      {(task.resources || []).length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-gray-600 mb-1">Resources</p>
+          <ul className="space-y-1">
+            {task.resources.map((r, i) => (
+              <li key={i} className="flex items-center gap-2 text-xs">
+                <ExternalLink size={11} className="text-blue-400 shrink-0" />
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 text-blue-600 hover:underline truncate"
+                >
+                  {r.title}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => removeResource(i)}
+                  className="text-gray-400 hover:text-red-500 shrink-0"
+                >
+                  <X size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── AI Assistant Tab ─────────────────────────────────────────────────────────
+function AIAssistantTab({ assignees, onSuccess, onCancel }) {
+  const [roadmap, setRoadmap] = useState('');
+  const [startDate, setStartDate] = useState(todayStr());
+  const [durationDays, setDurationDays] = useState('');
+  const [generating, setGenerating] = useState(false);
+
+  const [preview, setPreview] = useState(null); // array of tasks
+  const [assigneeIds, setAssigneeIds] = useState([]);
+  const [assigneeError, setAssigneeError] = useState('');
+  const [creating, setCreating] = useState(false);
+
+  const roadmapLen = roadmap.length;
+  const roadmapValid = roadmapLen >= 20 && roadmapLen <= 4000;
+
+  async function generate() {
+    if (!roadmapValid) {
+      toast.error('Roadmap must be 20–4000 characters.');
+      return;
+    }
+    setGenerating(true);
+    setPreview(null);
+    try {
+      const payload = { roadmap, startDate };
+      if (durationDays && parseInt(durationDays, 10) > 0) {
+        payload.durationDays = parseInt(durationDays, 10);
+      }
+      const res = await api.post('/ai/generate-tasks', payload);
+      setPreview(res.data.tasks);
+    } catch (err) {
+      toast.error(err.response?.data?.error ?? 'AI generation failed. Please try again.');
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  function updateTask(index, updated) {
+    setPreview((prev) => prev.map((t, i) => (i === index ? updated : t)));
+  }
+
+  function removeTask(index) {
+    setPreview((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  async function handleCreateAll() {
+    if (!preview || preview.length === 0) return;
+    if (assigneeIds.length === 0) {
+      setAssigneeError('At least one assignee is required.');
+      return;
+    }
+    setAssigneeError('');
+    setCreating(true);
+    try {
+      const res = await api.post('/ai/create-tasks', {
+        tasks: preview,
+        assigneeIds: assigneeIds.map((id) => parseInt(id, 10)),
+      });
+      toast.success(`${res.data.tasks.length} task(s) created successfully.`);
+      onSuccess?.(res.data.tasks[0]);
+    } catch (err) {
+      toast.error(err.response?.data?.error ?? 'Failed to create tasks.');
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Inputs */}
+      <Field label="Roadmap / Onboarding Plan" required error={!roadmapValid && roadmapLen > 0 ? 'Must be 20–4000 characters.' : undefined}>
+        <textarea
+          rows={5}
+          value={roadmap}
+          onChange={(e) => setRoadmap(e.target.value)}
+          placeholder="Paste or describe the onboarding roadmap, learning plan, or list of topics for the new hire…"
+          className={`${inputCls(roadmapLen > 0 && !roadmapValid)} resize-y`}
+        />
+        <p className={`mt-0.5 text-xs text-right ${roadmapLen > 4000 ? 'text-red-500' : 'text-gray-400'}`}>
+          {roadmapLen}/4000
+        </p>
+      </Field>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Field label="Start Date">
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className={inputCls(false)}
+          />
+        </Field>
+        <Field label="Total Duration (days)" >
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={durationDays}
+            onChange={(e) => setDurationDays(e.target.value)}
+            placeholder="Optional"
+            className={inputCls(false)}
+          />
+        </Field>
+      </div>
+
+      <Button
+        type="button"
+        onClick={generate}
+        loading={generating}
+        disabled={!roadmapValid}
+        className="w-full"
+      >
+        <Sparkles size={15} />
+        {generating ? 'Generating…' : 'Generate Tasks with AI'}
+      </Button>
+
+      {/* Preview */}
+      {preview && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-800">
+              Preview — {preview.length} task{preview.length !== 1 ? 's' : ''}
+            </h3>
+            <button
+              type="button"
+              onClick={generate}
+              disabled={generating}
+              className="flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
+            >
+              <RefreshCw size={12} className={generating ? 'animate-spin' : ''} />
+              Regenerate
+            </button>
+          </div>
+
+          {preview.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6 border border-dashed border-gray-200 rounded-xl">
+              All tasks removed. Click Regenerate to start over.
+            </p>
+          ) : (
+            <div className="space-y-3 max-h-[480px] overflow-y-auto pr-1">
+              {preview.map((task, i) => (
+                <AITaskCard
+                  key={i}
+                  task={task}
+                  index={i}
+                  onChange={updateTask}
+                  onRemove={removeTask}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Assignee selection */}
+          <Field
+            label={`Assignees${assigneeIds.length > 0 ? ` (${assigneeIds.length} selected)` : ''}`}
+            required
+            error={assigneeError}
+          >
+            <AssigneeCheckboxList
+              assignees={assignees}
+              selected={assigneeIds}
+              onChange={(ids) => { setAssigneeIds(ids); setAssigneeError(''); }}
+              error={assigneeError}
+            />
+          </Field>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-3 pt-2">
+            {onCancel && (
+              <Button type="button" variant="secondary" onClick={onCancel} disabled={creating}>
+                Cancel
+              </Button>
+            )}
+            <Button
+              type="button"
+              onClick={handleCreateAll}
+              loading={creating}
+              disabled={preview.length === 0}
+            >
+              Create all ({preview.length})
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel before preview is available */}
+      {!preview && onCancel && (
+        <div className="flex justify-end">
+          <Button type="button" variant="secondary" onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main TaskForm export ─────────────────────────────────────────────────────
 export default function TaskForm({ assignees = [], task = null, onSuccess, onCancel }) {
   const isEdit = !!task;
+
+  // Tab state — only relevant in create mode
+  const [activeTab, setActiveTab] = useState('manual');
 
   const [form, setForm] = useState({
     title: task?.title ?? '',
@@ -413,11 +773,127 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
     }
   }
 
+  // In edit mode there's no tab; render only the manual form
+  if (isEdit) {
+    return (
+      <form onSubmit={handleSubmit} className="space-y-5 max-w-2xl">
+        <ManualFormFields
+          form={form}
+          set={set}
+          errors={errors}
+          isEdit={isEdit}
+          preventEnterSubmit={preventEnterSubmit}
+          assignees={assignees}
+          assigneeId={assigneeId}
+          setAssigneeId={setAssigneeId}
+          setErrors={setErrors}
+          assigneeIds={assigneeIds}
+          setAssigneeIds={setAssigneeIds}
+          subtasks={subtasks}
+          addSubtask={addSubtask}
+          removeSubtask={removeSubtask}
+          updateSubtaskTitle={updateSubtaskTitle}
+          moveSubtask={moveSubtask}
+          existingAttachments={existingAttachments}
+          removingAttId={removingAttId}
+          removeExistingAttachment={removeExistingAttachment}
+          newFiles={newFiles}
+          removeNewFile={removeNewFile}
+          dragging={dragging}
+          setDragging={setDragging}
+          addFiles={addFiles}
+          fileInputRef={fileInputRef}
+          submitting={submitting}
+          onCancel={onCancel}
+        />
+      </form>
+    );
+  }
+
+  // Create mode — two tabs
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="space-y-5 max-w-2xl"
-    >
+    <div className="space-y-4 max-w-2xl">
+      {/* Tab bar */}
+      <div className="flex border-b border-gray-200">
+        <button
+          type="button"
+          onClick={() => setActiveTab('manual')}
+          className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'manual'
+              ? 'border-purple-600 text-purple-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Manual
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('ai')}
+          className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+            activeTab === 'ai'
+              ? 'border-purple-600 text-purple-700'
+              : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Sparkles size={13} />
+          AI Assistant
+        </button>
+      </div>
+
+      {activeTab === 'manual' ? (
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <ManualFormFields
+            form={form}
+            set={set}
+            errors={errors}
+            isEdit={isEdit}
+            preventEnterSubmit={preventEnterSubmit}
+            assignees={assignees}
+            assigneeId={assigneeId}
+            setAssigneeId={setAssigneeId}
+            setErrors={setErrors}
+            assigneeIds={assigneeIds}
+            setAssigneeIds={setAssigneeIds}
+            subtasks={subtasks}
+            addSubtask={addSubtask}
+            removeSubtask={removeSubtask}
+            updateSubtaskTitle={updateSubtaskTitle}
+            moveSubtask={moveSubtask}
+            existingAttachments={existingAttachments}
+            removingAttId={removingAttId}
+            removeExistingAttachment={removeExistingAttachment}
+            newFiles={newFiles}
+            removeNewFile={removeNewFile}
+            dragging={dragging}
+            setDragging={setDragging}
+            addFiles={addFiles}
+            fileInputRef={fileInputRef}
+            submitting={submitting}
+            onCancel={onCancel}
+          />
+        </form>
+      ) : (
+        <AIAssistantTab
+          assignees={assignees}
+          onSuccess={onSuccess}
+          onCancel={onCancel}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Manual form fields extracted as a render helper ──────────────────────────
+function ManualFormFields({
+  form, set, errors, isEdit, preventEnterSubmit,
+  assignees, assigneeId, setAssigneeId, setErrors, assigneeIds, setAssigneeIds,
+  subtasks, addSubtask, removeSubtask, updateSubtaskTitle, moveSubtask,
+  existingAttachments, removingAttId, removeExistingAttachment,
+  newFiles, removeNewFile, dragging, setDragging, addFiles, fileInputRef,
+  submitting, onCancel,
+}) {
+  return (
+    <>
       {/* Title */}
       <Field label="Title" required error={errors.title}>
         <input
@@ -642,6 +1118,6 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
           {isEdit ? 'Save Changes' : 'Create Task'}
         </Button>
       </div>
-    </form>
+    </>
   );
 }

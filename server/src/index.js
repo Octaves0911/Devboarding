@@ -10,6 +10,7 @@ const taskRoutes = require('./routes/tasks');
 const subtaskRoutes = require('./routes/subtasks');
 const attachmentRoutes = require('./routes/attachments');
 const profileRoutes = require('./routes/profile');
+const aiRoutes = require('./routes/ai');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +32,7 @@ app.use('/api', taskRoutes);
 app.use('/api', subtaskRoutes);
 app.use('/api', attachmentRoutes);
 app.use('/api', profileRoutes);
+app.use('/api', aiRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Paperclip, Download, Clock, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Paperclip, Download, Clock, ChevronLeft, ChevronRight, AlertTriangle, ExternalLink } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,55 @@ function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/**
+ * Render a task description that may contain a "## Resources" section with
+ * markdown-style links: [title](url). Renders the resources section as a list
+ * of clickable links; the rest is plain pre-wrapped text.
+ */
+function DescriptionWithResources({ text }) {
+  const resourcesIdx = text.indexOf('\n\n## Resources\n');
+  if (resourcesIdx === -1) {
+    return <p className="text-sm text-gray-700 whitespace-pre-wrap">{text}</p>;
+  }
+
+  const mainText = text.slice(0, resourcesIdx);
+  const resourcesBlock = text.slice(resourcesIdx + '\n\n## Resources\n'.length);
+
+  // Parse markdown links: [title](url)
+  const linkRegex = /^- \[(.+?)\]\((.+?)\)$/gm;
+  const links = [];
+  let match;
+  while ((match = linkRegex.exec(resourcesBlock)) !== null) {
+    links.push({ title: match[1], url: match[2] });
+  }
+
+  return (
+    <>
+      {mainText && <p className="text-sm text-gray-700 whitespace-pre-wrap mb-3">{mainText}</p>}
+      {links.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Resources</p>
+          <ul className="space-y-1.5">
+            {links.map((r, i) => (
+              <li key={i} className="flex items-center gap-2 text-sm">
+                <ExternalLink size={13} className="text-blue-400 shrink-0" />
+                <a
+                  href={r.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline break-all"
+                >
+                  {r.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
 }
 
 function formatDateTime(iso) {
@@ -296,7 +345,7 @@ export default function TaskDetail({
       {/* Description */}
       <div className="bg-white rounded-xl border border-gray-200 p-5">
         <h2 className="text-sm font-semibold text-gray-700 mb-2">Description</h2>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{task.description}</p>
+        <DescriptionWithResources text={task.description} />
       </div>
 
       {/* Status control (assignee only) */}

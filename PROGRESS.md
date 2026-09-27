@@ -1,6 +1,6 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 7 (complete) | Next: Phase 8
+## Current Phase: 9 (complete) | Next: Phase 10
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
@@ -15,6 +15,13 @@
   - MenteeTaskDetail: TaskDetail with prevId/nextId navigation (Previous/Next buttons cycle through assigned tasks)
   - MenteeMentor: mentor card (name, email, phone, designation, department)
   - New API: GET /users/my-mentor (MENTEE only — returns own assigned mentor's details)
+
+- Phase 9: AI Task Generator (HR + Mentor)
+  - Shared LLM helper: server/src/lib/llm.js — callLLM({ system, messages, json }), 60s timeout, in-memory rate limit 10 calls/min per user, JSON mode with fence-stripping, retry once on parse failure
+  - POST /api/ai/generate-tasks — HR + MENTOR only; validates roadmap (20–4000 chars); calls LLM for up to 10 tasks; parallel HEAD/GET URL-checks each resource (5s timeout, drops unreachable); computes sequential due dates from startDate + cumulative estimatedDays
+  - POST /api/ai/create-tasks — bulk-creates confirmed preview tasks for all selected assignees; resources appended to description under a "## Resources" heading
+  - TaskForm create mode: two tabs — "Manual" (unchanged) and "AI Assistant"; AI tab has roadmap textarea (char counter), start date, optional duration; Generate button → editable preview cards (title, description, priority, due date, add/remove subtasks, remove resources, remove task); Regenerate button; assignee checkbox selection applies to all tasks; "Create all (N)" button
+  - TaskDetail: DescriptionWithResources renderer parses "## Resources" markdown links and renders them as clickable anchors with ExternalLink icon
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)
