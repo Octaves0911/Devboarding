@@ -30,21 +30,23 @@ model User {
 }
 
 model Task {
-  id             Int       @id @default(autoincrement())
-  title          String
-  description    String
-  priority       String    // LOW | MEDIUM | HIGH
-  dueDate        DateTime
-  status         String    @default("TODO") // TODO | IN_PROGRESS | DONE
-  createdById    Int
-  createdBy      User      @relation("TaskCreator", fields: [createdById], references: [id])
-  assigneeId     Int
-  assignee       User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
-  completionNote String?
-  completedAt    DateTime?
-  batchId        String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  Int       @id @default(autoincrement())
+  title               String
+  description         String
+  priority            String    // LOW | MEDIUM | HIGH
+  dueDate             DateTime
+  status              String    @default("TODO") // TODO | IN_PROGRESS | DONE
+  createdById         Int
+  createdBy           User      @relation("TaskCreator", fields: [createdById], references: [id])
+  assigneeId          Int
+  assignee            User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  completionNote      String?
+  completedAt         DateTime?
+  batchId             String?
+  hasWorkspace        Boolean   @default(false)
+  workspaceTemplateId String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   subtasks    Subtask[]
   attachments Attachment[]

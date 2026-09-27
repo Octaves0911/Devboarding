@@ -1,6 +1,6 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 9 (complete) | Next: Phase 10
+## Current Phase: 10 (complete) | Next: Phase 11
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
@@ -10,20 +10,21 @@
 - Phase 5: Shared components + HR dashboard (fully functional)
 - Phase 6: Mentor dashboard (all tabs, fully functional)
 - Phase 7: Mentee dashboard (all tabs, fully functional)
-  - MenteeOverview: SVG progress ring (% done), status stat cards (todo/inprogress/done), next 3 upcoming due dates, overdue banner
-  - MenteeTasks: sub-tabs (All / Assigned by HR / Assigned by Mentor), status filter, table with subtask progress (e.g. 2/5), overdue badge, click → detail
-  - MenteeTaskDetail: TaskDetail with prevId/nextId navigation (Previous/Next buttons cycle through assigned tasks)
-  - MenteeMentor: mentor card (name, email, phone, designation, department)
-  - New API: GET /users/my-mentor (MENTEE only — returns own assigned mentor's details)
-
-- Phase 9: AI Task Generator (HR + Mentor)
-  - Shared LLM helper: server/src/lib/llm.js — callLLM({ system, messages, json }), 60s timeout, in-memory rate limit 10 calls/min per user, JSON mode with fence-stripping, retry once on parse failure
-  - POST /api/ai/generate-tasks — HR + MENTOR only; validates roadmap (20–4000 chars); calls LLM for up to 10 tasks; parallel HEAD/GET URL-checks each resource (5s timeout, drops unreachable); computes sequential due dates from startDate + cumulative estimatedDays
-  - POST /api/ai/create-tasks — bulk-creates confirmed preview tasks for all selected assignees; resources appended to description under a "## Resources" heading
-  - TaskForm create mode: two tabs — "Manual" (unchanged) and "AI Assistant"; AI tab has roadmap textarea (char counter), start date, optional duration; Generate button → editable preview cards (title, description, priority, due date, add/remove subtasks, remove resources, remove task); Regenerate button; assignee checkbox selection applies to all tasks; "Create all (N)" button
-  - TaskDetail: DescriptionWithResources renderer parses "## Resources" markdown links and renders them as clickable anchors with ExternalLink icon
+- Phase 9: AI Task Generator (HR + Mentor) — LLM helper, generate-tasks, create-tasks, AI tab in TaskForm, DescriptionWithResources
+- Phase 10: Code Workspace
+  - POST /api/workspaces/templates (MENTOR only) — zip upload, adm-zip extraction, skip traversal/symlinks/binaries/node_modules/.git, max 5 MB / 300 files / 200 KB per file
+  - Task.hasWorkspace + Task.workspaceTemplateId migration; workspace copied per assignee on task create (manual + AI bulk); rolls back all tasks on copy failure
+  - On reassign: workspace replaced with fresh template copy
+  - On task delete: workspace folder removed; template cleaned up when no tasks reference it
+  - GET /tree, GET /file, PUT /file (assignee write; read: assignee/creator/HR/admin/mentor), GET /download (zip stream)
+  - PUT blocked when task.status === DONE; first PUT on TODO task → IN_PROGRESS
+  - TaskForm: MENTOR-only "Include code workspace" toggle + .zip upload in both Manual and AI tabs
+  - TaskDetail: "Open in Code Workspace" button when hasWorkspace
+  - WorkspacePage: file tree, Monaco editor (local package, no CDN), file tabs, unsaved dot, Ctrl/Cmd+S, top bar, collapsible task panel, right assistant placeholder
+  - Routes: /mentee/workspace/:taskId (writable), /mentor/workspace/:taskId, /hr/workspace/:taskId, /admin/workspace/:taskId (all read-only)
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)
 - Uploads stored in /server/uploads, max 10 MB, types: pdf, docx, xlsx, png, jpg, zip
+- Workspaces stored in /server/workspaces/templates/ and /server/workspaces/tasks/
 - Role colours: Admin=slate, HR=purple, Mentor=blue, Mentee=green

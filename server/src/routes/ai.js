@@ -9,6 +9,10 @@ const { callLLM } = require('../lib/llm');
 const prisma = require('../lib/prisma');
 const { logActivity } = require('../lib/activity');
 const { randomUUID } = require('crypto');
+const {
+  copyWorkspaceForTask,
+  removeTaskWorkspace,
+} = require('./workspaces');
 
 const router = express.Router();
 
@@ -173,13 +177,18 @@ router.post(
   authorize('HR', 'MENTOR'),
   async (req, res) => {
     try {
-      const { tasks: taskList, assigneeIds: rawAssigneeIds } = req.body;
+      const { tasks: taskList, assigneeIds: rawAssigneeIds, templateId } = req.body;
 
       if (!Array.isArray(taskList) || taskList.length === 0) {
         return res.status(400).json({ error: 'tasks array is required' });
       }
       if (!Array.isArray(rawAssigneeIds) || rawAssigneeIds.length === 0) {
         return res.status(400).json({ error: 'assigneeIds array is required' });
+      }
+
+      // templateId only allowed for MENTOR
+      if (templateId && req.user.role !== 'MENTOR') {
+        return res.status(403).json({ error: 'Only MENTOR can attach a workspace' });
       }
 
       const assigneeIdInts = rawAssigneeIds.map((id) => parseInt(id, 10));
@@ -218,12 +227,30 @@ router.post(
               createdById: req.user.id,
               assigneeId,
               batchId,
+              hasWorkspace: !!templateId,
+              workspaceTemplateId: templateId ?? null,
               subtasks: subtaskData.length > 0 ? { create: subtaskData } : undefined,
             },
             include: TASK_INCLUDE,
           });
           await logActivity(task.id, req.user.id, 'CREATED');
           created.push(task);
+        }
+      }
+
+      // Copy workspace per created task if templateId provided
+      if (templateId && created.length > 0) {
+        const copied = [];
+        try {
+          for (const t of created) {
+            await copyWorkspaceForTask(templateId, t.id);
+            copied.push(t.id);
+          }
+        } catch (copyErr) {
+          console.error('Workspace copy failed in AI create-tasks, rolling back:', copyErr);
+          for (const id of copied) await removeTaskWorkspace(id);
+          await prisma.task.deleteMany({ where: { id: { in: created.map((t) => t.id) } } });
+          return res.status(500).json({ error: 'Failed to copy workspace. No tasks were created.' });
         }
       }
 

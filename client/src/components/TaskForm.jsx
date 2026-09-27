@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import { Plus, Trash2, GripVertical, Paperclip, X, Search, Sparkles, RefreshCw, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, GripVertical, Paperclip, X, Search, Sparkles, RefreshCw, ExternalLink, FolderCode } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import Button from './Button';
+import { useAuth } from '../context/AuthContext';
 
 const ALLOWED_EXTS = ['pdf', 'docx', 'xlsx', 'png', 'jpg', 'jpeg', 'zip'];
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -390,7 +391,7 @@ function AITaskCard({ task, index, onChange, onRemove }) {
 }
 
 // ── AI Assistant Tab ─────────────────────────────────────────────────────────
-function AIAssistantTab({ assignees, onSuccess, onCancel }) {
+function AIAssistantTab({ assignees, onSuccess, onCancel, isMentor }) {
   const [roadmap, setRoadmap] = useState('');
   const [startDate, setStartDate] = useState(todayStr());
   const [durationDays, setDurationDays] = useState('');
@@ -400,6 +401,12 @@ function AIAssistantTab({ assignees, onSuccess, onCancel }) {
   const [assigneeIds, setAssigneeIds] = useState([]);
   const [assigneeError, setAssigneeError] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // Workspace (MENTOR only)
+  const [includeWorkspace, setIncludeWorkspace] = useState(false);
+  const [workspaceFile, setWorkspaceFile]       = useState(null);
+  const [uploadingWs, setUploadingWs]           = useState(false);
+  const workspaceInputRef = useRef(null);
 
   const roadmapLen = roadmap.length;
   const roadmapValid = roadmapLen >= 20 && roadmapLen <= 4000;
@@ -442,9 +449,31 @@ function AIAssistantTab({ assignees, onSuccess, onCancel }) {
     setAssigneeError('');
     setCreating(true);
     try {
+      // Upload workspace zip first if requested
+      let templateId = null;
+      if (isMentor && includeWorkspace && workspaceFile) {
+        setUploadingWs(true);
+        try {
+          const fd = new FormData();
+          fd.append('file', workspaceFile);
+          const wsRes = await api.post('/workspaces/templates', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          templateId = wsRes.data.templateId;
+        } catch (wsErr) {
+          toast.error(wsErr.response?.data?.error ?? 'Failed to upload workspace zip.');
+          setCreating(false);
+          setUploadingWs(false);
+          return;
+        } finally {
+          setUploadingWs(false);
+        }
+      }
+
       const res = await api.post('/ai/create-tasks', {
         tasks: preview,
         assigneeIds: assigneeIds.map((id) => parseInt(id, 10)),
+        ...(templateId ? { templateId } : {}),
       });
       toast.success(`${res.data.tasks.length} task(s) created successfully.`);
       onSuccess?.(res.data.tasks[0]);
@@ -554,17 +583,76 @@ function AIAssistantTab({ assignees, onSuccess, onCancel }) {
             />
           </Field>
 
+          {/* Workspace toggle (MENTOR only) */}
+          {isMentor && (
+            <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="aiIncludeWorkspace"
+                  checked={includeWorkspace}
+                  onChange={(e) => {
+                    setIncludeWorkspace(e.target.checked);
+                    if (!e.target.checked) setWorkspaceFile(null);
+                  }}
+                  className="w-4 h-4 rounded accent-purple-600 cursor-pointer"
+                />
+                <label htmlFor="aiIncludeWorkspace" className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                  <FolderCode size={15} className="text-blue-500" />
+                  Include code workspace
+                </label>
+              </div>
+              {includeWorkspace && (
+                <div>
+                  {workspaceFile ? (
+                    <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 text-sm">
+                      <div className="flex items-center gap-2 truncate">
+                        <FolderCode size={13} className="text-blue-400 shrink-0" />
+                        <span className="truncate text-gray-700">{workspaceFile.name}</span>
+                        <span className="text-xs text-gray-400 shrink-0">{(workspaceFile.size / 1024).toFixed(0)} KB</span>
+                      </div>
+                      <button type="button" onClick={() => setWorkspaceFile(null)} className="text-gray-400 hover:text-red-500 ml-2 shrink-0">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => workspaceInputRef.current?.click()}
+                      className="border-2 border-dashed border-blue-200 rounded-lg px-4 py-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                    >
+                      <FolderCode size={18} className="mx-auto mb-1 text-blue-300" />
+                      <p className="text-xs text-gray-500">Click to upload a <strong>.zip</strong> workspace</p>
+                      <p className="text-xs text-gray-400 mt-0.5">Max 5 MB — no node_modules, .git, binaries</p>
+                      <input
+                        ref={workspaceInputRef}
+                        type="file"
+                        accept=".zip"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (!f) return;
+                          if (f.size > 5 * 1024 * 1024) { toast.error('Workspace zip must be under 5 MB.'); return; }
+                          setWorkspaceFile(f);
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-2">
             {onCancel && (
-              <Button type="button" variant="secondary" onClick={onCancel} disabled={creating}>
+              <Button type="button" variant="secondary" onClick={onCancel} disabled={creating || uploadingWs}>
                 Cancel
               </Button>
             )}
             <Button
               type="button"
               onClick={handleCreateAll}
-              loading={creating}
+              loading={creating || uploadingWs}
               disabled={preview.length === 0}
             >
               Create all ({preview.length})
@@ -588,6 +676,8 @@ function AIAssistantTab({ assignees, onSuccess, onCancel }) {
 // ── Main TaskForm export ─────────────────────────────────────────────────────
 export default function TaskForm({ assignees = [], task = null, onSuccess, onCancel }) {
   const isEdit = !!task;
+  const { user } = useAuth();
+  const isMentor = user?.role === 'MENTOR';
 
   // Tab state — only relevant in create mode
   const [activeTab, setActiveTab] = useState('manual');
@@ -626,6 +716,12 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
   const [newFiles, setNewFiles] = useState([]);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef(null);
+
+  // Workspace (MENTOR create mode only)
+  const [includeWorkspace, setIncludeWorkspace] = useState(false);
+  const [workspaceFile, setWorkspaceFile]       = useState(null);
+  const [uploadingWs, setUploadingWs]           = useState(false);
+  const workspaceInputRef = useRef(null);
 
   const [submitting, setSubmitting] = useState(false);
 
@@ -721,6 +817,27 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
 
     setSubmitting(true);
     try {
+      // Upload workspace zip first if requested (MENTOR create mode)
+      let templateId = null;
+      if (!isEdit && isMentor && includeWorkspace && workspaceFile) {
+        setUploadingWs(true);
+        try {
+          const fd = new FormData();
+          fd.append('file', workspaceFile);
+          const wsRes = await api.post('/workspaces/templates', fd, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          });
+          templateId = wsRes.data.templateId;
+        } catch (wsErr) {
+          toast.error(wsErr.response?.data?.error ?? 'Failed to upload workspace zip.');
+          setSubmitting(false);
+          setUploadingWs(false);
+          return;
+        } finally {
+          setUploadingWs(false);
+        }
+      }
+
       const basePayload = {
         title: form.title.trim(),
         description: form.description.trim(),
@@ -741,6 +858,7 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
         const payload = {
           ...basePayload,
           assigneeIds: assigneeIds.map((id) => parseInt(id, 10)),
+          ...(templateId ? { templateId } : {}),
         };
         const res = await api.post('/tasks', payload);
         // Server returns { task } for single, { tasks, batchId } for multi
@@ -868,8 +986,14 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
             setDragging={setDragging}
             addFiles={addFiles}
             fileInputRef={fileInputRef}
-            submitting={submitting}
+            submitting={submitting || uploadingWs}
             onCancel={onCancel}
+            isMentor={isMentor}
+            includeWorkspace={includeWorkspace}
+            setIncludeWorkspace={setIncludeWorkspace}
+            workspaceFile={workspaceFile}
+            setWorkspaceFile={setWorkspaceFile}
+            workspaceInputRef={workspaceInputRef}
           />
         </form>
       ) : (
@@ -877,6 +1001,7 @@ export default function TaskForm({ assignees = [], task = null, onSuccess, onCan
           assignees={assignees}
           onSuccess={onSuccess}
           onCancel={onCancel}
+          isMentor={isMentor}
         />
       )}
     </div>
@@ -891,6 +1016,8 @@ function ManualFormFields({
   existingAttachments, removingAttId, removeExistingAttachment,
   newFiles, removeNewFile, dragging, setDragging, addFiles, fileInputRef,
   submitting, onCancel,
+  isMentor, includeWorkspace, setIncludeWorkspace,
+  workspaceFile, setWorkspaceFile, workspaceInputRef,
 }) {
   return (
     <>
@@ -1106,6 +1233,65 @@ function ManualFormFields({
           />
         </div>
       </div>
+
+      {/* Code Workspace (MENTOR create mode only) */}
+      {!isEdit && isMentor && (
+        <div className="border border-gray-200 rounded-xl p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox"
+              id="includeWorkspace"
+              checked={includeWorkspace}
+              onChange={(e) => {
+                setIncludeWorkspace(e.target.checked);
+                if (!e.target.checked) setWorkspaceFile(null);
+              }}
+              className="w-4 h-4 rounded accent-purple-600 cursor-pointer"
+            />
+            <label htmlFor="includeWorkspace" className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+              <FolderCode size={15} className="text-blue-500" />
+              Include code workspace
+            </label>
+          </div>
+          {includeWorkspace && (
+            <div>
+              {workspaceFile ? (
+                <div className="flex items-center justify-between px-3 py-2 bg-blue-50 rounded-lg border border-blue-100 text-sm">
+                  <div className="flex items-center gap-2 truncate">
+                    <FolderCode size={13} className="text-blue-400 shrink-0" />
+                    <span className="truncate text-gray-700">{workspaceFile.name}</span>
+                    <span className="text-xs text-gray-400 shrink-0">{(workspaceFile.size / 1024).toFixed(0)} KB</span>
+                  </div>
+                  <button type="button" onClick={() => setWorkspaceFile(null)} className="text-gray-400 hover:text-red-500 ml-2 shrink-0">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div
+                  onClick={() => workspaceInputRef.current?.click()}
+                  className="border-2 border-dashed border-blue-200 rounded-lg px-4 py-4 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors"
+                >
+                  <FolderCode size={18} className="mx-auto mb-1 text-blue-300" />
+                  <p className="text-xs text-gray-500">Click to upload a <strong>.zip</strong> workspace</p>
+                  <p className="text-xs text-gray-400 mt-0.5">Max 5 MB — no node_modules, .git, binaries</p>
+                  <input
+                    ref={workspaceInputRef}
+                    type="file"
+                    accept=".zip"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      if (f.size > 5 * 1024 * 1024) { toast.error('Workspace zip must be under 5 MB.'); return; }
+                      setWorkspaceFile(f);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex justify-end gap-3 pt-2">

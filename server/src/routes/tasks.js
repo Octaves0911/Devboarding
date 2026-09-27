@@ -3,6 +3,11 @@ const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { logActivity, canViewTask } = require('../lib/activity');
 const { randomUUID } = require('crypto');
+const {
+  copyWorkspaceForTask,
+  removeTaskWorkspace,
+  removeTemplateIfOrphaned,
+} = require('./workspaces');
 
 const router = express.Router();
 
@@ -116,9 +121,15 @@ router.get('/tasks/:id', authenticate, authorize('ADMIN', 'HR', 'MENTOR', 'MENTE
 // Accepts assigneeId (single, backward compat) or assigneeIds (array).
 // When multiple assignees: creates one task copy per assignee in a transaction,
 // all sharing a new batchId. If any assignee fails permission → 403, nothing created.
+// Optional templateId (MENTOR only): copies workspace per assignee; rolls back all on failure.
 router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) => {
   try {
-    const { title, description, priority, dueDate, subtasks } = req.body;
+    const { title, description, priority, dueDate, subtasks, templateId } = req.body;
+
+    // templateId only allowed for MENTOR
+    if (templateId && req.user.role !== 'MENTOR') {
+      return res.status(403).json({ error: 'Only MENTOR can attach a workspace' });
+    }
 
     // Normalise assignee list
     let rawIds = req.body.assigneeIds ?? (req.body.assigneeId ? [req.body.assigneeId] : []);
@@ -160,6 +171,8 @@ router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) 
           createdById: req.user.id,
           assigneeId,
           batchId,
+          hasWorkspace: !!templateId,
+          workspaceTemplateId: templateId ?? null,
           subtasks: subtasks && subtasks.length > 0
             ? { create: subtasks.map((s, i) => ({ title: s.title, order: i })) }
             : undefined,
@@ -178,6 +191,23 @@ router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) 
         })
       )
     );
+
+    // Copy workspace per assignee if templateId provided
+    if (templateId) {
+      const copied = [];
+      try {
+        for (const t of createdTasks) {
+          await copyWorkspaceForTask(templateId, t.id);
+          copied.push(t.id);
+        }
+      } catch (copyErr) {
+        // Roll back: delete created tasks and copied workspaces
+        console.error('Workspace copy failed, rolling back tasks:', copyErr);
+        for (const id of copied) await removeTaskWorkspace(id);
+        await prisma.task.deleteMany({ where: { id: { in: createdTasks.map((t) => t.id) } } });
+        return res.status(500).json({ error: 'Failed to copy workspace. No tasks were created.' });
+      }
+    }
 
     // Return single task for single-assignee (backward compat), array for multi
     if (createdTasks.length === 1) {
@@ -255,6 +285,17 @@ router.put('/tasks/:id', authenticate, authorize('HR', 'MENTOR'), async (req, re
 
     if (reassigned) {
       await logActivity(id, req.user.id, 'REASSIGNED');
+
+      // Replace workspace with a fresh copy from the template
+      if (task.hasWorkspace && task.workspaceTemplateId) {
+        try {
+          await removeTaskWorkspace(id);
+          await copyWorkspaceForTask(task.workspaceTemplateId, id);
+        } catch (copyErr) {
+          console.error('Workspace refresh failed on reassign:', copyErr);
+          // Non-fatal: task is already reassigned
+        }
+      }
     }
 
     return res.json({ task: updated });
@@ -272,7 +313,20 @@ router.delete('/tasks/:id', authenticate, authorize('HR', 'MENTOR'), async (req,
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.createdById !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
 
+    const templateId = task.workspaceTemplateId;
+
     await prisma.task.delete({ where: { id } });
+
+    // Remove workspace folder
+    if (task.hasWorkspace) {
+      await removeTaskWorkspace(id);
+    }
+
+    // Remove template if no other tasks reference it
+    if (templateId) {
+      await removeTemplateIfOrphaned(templateId);
+    }
+
     return res.json({ message: 'Task deleted' });
   } catch (err) {
     console.error(err);

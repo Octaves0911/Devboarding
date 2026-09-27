@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Paperclip, Download, Clock, ChevronLeft, ChevronRight, AlertTriangle, ExternalLink } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Paperclip, Download, Clock, ChevronLeft, ChevronRight, AlertTriangle, ExternalLink, FolderCode } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -105,6 +106,7 @@ export default function TaskDetail({
   onNavigate,
 }) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [task, setTask] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -162,6 +164,15 @@ export default function TaskDetail({
   const isAssignee = task.assigneeId === user?.id;
   const allSubtasksDone = task.subtasks.every((s) => s.isDone);
   const overdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'DONE';
+
+  // Workspace navigation
+  function openWorkspace() {
+    const role = user?.role?.toLowerCase();
+    if (role === 'mentee') navigate(`/mentee/workspace/${task.id}`);
+    else if (role === 'mentor') navigate(`/mentor/workspace/${task.id}`);
+    else if (role === 'hr') navigate(`/hr/workspace/${task.id}`);
+    else if (role === 'admin') navigate(`/admin/workspace/${task.id}`);
+  }
 
   const refAttachments = task.attachments.filter((a) => a.kind === 'REFERENCE');
   const subAttachments = task.attachments.filter((a) => a.kind === 'SUBMISSION');
@@ -298,7 +309,13 @@ export default function TaskDetail({
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {task.hasWorkspace && (
+            <Button size="sm" variant="secondary" onClick={openWorkspace} className="flex items-center gap-1.5">
+              <FolderCode size={13} />
+              Open in Code Workspace
+            </Button>
+          )}
           {isCreator && assignees !== null && (
             <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
               Edit
