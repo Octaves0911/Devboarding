@@ -1,7 +1,7 @@
 // DevBoarding - Phase 2 permission tests
 // Run from repo root while the server is running: node scripts/test-phase2.mjs
 const BASE = process.env.BASE || 'http://localhost:5001/api';
-const ADMIN = { email: 'admin@devboarding.com', password: 'Admin@123' };
+const ADMIN = { email: 'admin@devboarding.com', password: '123456' };
 const PW = 'Test@1234';
 const ts = Date.now();
 let pass = 0, fail = 0;

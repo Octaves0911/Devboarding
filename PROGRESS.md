@@ -56,6 +56,7 @@
   - Calendar tab for every role: month grid, upcoming list, pending Accept/Decline, organizer Cancel, request modal
 
 ## Notes
+- Demo seed replaces all users with a realistic roster (password `123456`). Run `npm run db:seed` from `server/`.
 - Server runs on port 5001 (macOS Control Center holds 5000)
 - Uploads stored in /server/uploads, max 10 MB, types: pdf, docx, xlsx, png, jpg, zip
 - Workspaces stored in /server/workspaces/templates/ and /server/workspaces/tasks/
