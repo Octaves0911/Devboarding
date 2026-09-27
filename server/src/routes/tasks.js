@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { logActivity, canViewTask } = require('../lib/activity');
+const { randomUUID } = require('crypto');
 
 const router = express.Router();
 
@@ -40,6 +41,31 @@ async function taskWhereForUser(user, overrides = {}) {
 
   // MENTEE
   return { ...overrides, assigneeId: user.id };
+}
+
+/**
+ * Validate that `assigneeId` satisfies the creator's permission rules.
+ * Returns an error string, or null if valid.
+ */
+async function validateAssigneePermission(creatorRole, creatorId, assigneeId) {
+  const assignee = await prisma.user.findUnique({ where: { id: assigneeId } });
+  if (!assignee || !assignee.isActive) {
+    return 'Assignee not found or inactive';
+  }
+
+  if (creatorRole === 'HR') {
+    if (!['HR', 'MENTOR', 'MENTEE'].includes(assignee.role)) {
+      return 'HR can only assign tasks to HR, MENTOR, or MENTEE users';
+    }
+  }
+
+  if (creatorRole === 'MENTOR') {
+    if (assignee.role !== 'MENTEE' || assignee.mentorId !== creatorId) {
+      return 'MENTOR can only assign tasks to their own mentees';
+    }
+  }
+
+  return null;
 }
 
 // GET /api/tasks
@@ -86,13 +112,21 @@ router.get('/tasks/:id', authenticate, authorize('ADMIN', 'HR', 'MENTOR', 'MENTE
   }
 });
 
-// POST /api/tasks — HR: any active HR/MENTOR/MENTEE; MENTOR: own mentees only; ADMIN/MENTEE: 403
+// POST /api/tasks — HR: any active HR/MENTOR/MENTEE; MENTOR: own mentees only
+// Accepts assigneeId (single, backward compat) or assigneeIds (array).
+// When multiple assignees: creates one task copy per assignee in a transaction,
+// all sharing a new batchId. If any assignee fails permission → 403, nothing created.
 router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) => {
   try {
-    const { title, description, priority, dueDate, assigneeId, subtasks } = req.body;
+    const { title, description, priority, dueDate, subtasks } = req.body;
 
-    if (!title || !description || !priority || !dueDate || !assigneeId) {
-      return res.status(400).json({ error: 'title, description, priority, dueDate, and assigneeId are required' });
+    // Normalise assignee list
+    let rawIds = req.body.assigneeIds ?? (req.body.assigneeId ? [req.body.assigneeId] : []);
+    if (!Array.isArray(rawIds)) rawIds = [rawIds];
+    const assigneeIdInts = rawIds.map((id) => parseInt(id, 10));
+
+    if (!title || !description || !priority || !dueDate || assigneeIdInts.length === 0) {
+      return res.status(400).json({ error: 'title, description, priority, dueDate, and assigneeId(s) are required' });
     }
     if (title.length > 120) return res.status(400).json({ error: 'title must be 120 chars or fewer' });
     if (description.length < 10) return res.status(400).json({ error: 'description must be at least 10 chars' });
@@ -104,41 +138,52 @@ router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) 
       return res.status(400).json({ error: 'dueDate must be a valid future date' });
     }
 
-    const assigneeIdInt = parseInt(assigneeId, 10);
-    const assignee = await prisma.user.findUnique({ where: { id: assigneeIdInt } });
-    if (!assignee || !assignee.isActive) {
-      return res.status(400).json({ error: 'Assignee not found or inactive' });
-    }
-
-    if (req.user.role === 'HR') {
-      if (!['HR', 'MENTOR', 'MENTEE'].includes(assignee.role)) {
-        return res.status(403).json({ error: 'HR can only assign tasks to HR, MENTOR, or MENTEE users' });
+    // Validate all assignees before creating anything
+    for (const assigneeId of assigneeIdInts) {
+      const permErr = await validateAssigneePermission(req.user.role, req.user.id, assigneeId);
+      if (permErr) {
+        return res.status(403).json({ error: permErr });
       }
     }
 
-    if (req.user.role === 'MENTOR') {
-      if (!['MENTEE'].includes(assignee.role) || assignee.mentorId !== req.user.id) {
-        return res.status(403).json({ error: 'MENTOR can only assign tasks to their own mentees' });
-      }
+    // Single batchId for multi-assign (null for single)
+    const batchId = assigneeIdInts.length > 1 ? randomUUID() : null;
+
+    // Build create operations for all task copies
+    const taskOps = assigneeIdInts.map((assigneeId) =>
+      prisma.task.create({
+        data: {
+          title,
+          description,
+          priority,
+          dueDate: due,
+          createdById: req.user.id,
+          assigneeId,
+          batchId,
+          subtasks: subtasks && subtasks.length > 0
+            ? { create: subtasks.map((s, i) => ({ title: s.title, order: i })) }
+            : undefined,
+        },
+        include: TASK_INCLUDE,
+      })
+    );
+
+    const createdTasks = await prisma.$transaction(taskOps);
+
+    // Log CREATED activity for each task
+    await prisma.$transaction(
+      createdTasks.map((t) =>
+        prisma.taskActivity.create({
+          data: { taskId: t.id, userId: req.user.id, action: 'CREATED' },
+        })
+      )
+    );
+
+    // Return single task for single-assignee (backward compat), array for multi
+    if (createdTasks.length === 1) {
+      return res.status(201).json({ task: createdTasks[0] });
     }
-
-    const task = await prisma.task.create({
-      data: {
-        title,
-        description,
-        priority,
-        dueDate: due,
-        createdById: req.user.id,
-        assigneeId: assigneeIdInt,
-        subtasks: subtasks && subtasks.length > 0
-          ? { create: subtasks.map((s, i) => ({ title: s.title, order: i })) }
-          : undefined,
-      },
-      include: TASK_INCLUDE,
-    });
-
-    await logActivity(task.id, req.user.id, 'CREATED');
-    return res.status(201).json({ task });
+    return res.status(201).json({ tasks: createdTasks, batchId });
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
@@ -146,6 +191,8 @@ router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) 
 });
 
 // PUT /api/tasks/:id — creator only
+// Accepts optional assigneeId to reassign. On reassign: status→TODO, subtasks unticked,
+// completionNote/completedAt cleared, logs REASSIGNED activity.
 router.put('/tasks/:id', authenticate, authorize('HR', 'MENTOR'), async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -153,7 +200,7 @@ router.put('/tasks/:id', authenticate, authorize('HR', 'MENTOR'), async (req, re
     if (!task) return res.status(404).json({ error: 'Task not found' });
     if (task.createdById !== req.user.id) return res.status(403).json({ error: 'Forbidden' });
 
-    const { title, description, priority, dueDate, subtasks } = req.body;
+    const { title, description, priority, dueDate, subtasks, assigneeId } = req.body;
 
     if (title !== undefined && title.length > 120) {
       return res.status(400).json({ error: 'title must be 120 chars or fewer' });
@@ -178,13 +225,38 @@ router.put('/tasks/:id', authenticate, authorize('HR', 'MENTOR'), async (req, re
     if (priority !== undefined) data.priority = priority;
     if (due !== undefined) data.dueDate = due;
 
+    let reassigned = false;
+
+    // Handle reassignment
+    if (assigneeId !== undefined) {
+      const newAssigneeId = parseInt(assigneeId, 10);
+      if (newAssigneeId !== task.assigneeId) {
+        const permErr = await validateAssigneePermission(req.user.role, req.user.id, newAssigneeId);
+        if (permErr) return res.status(403).json({ error: permErr });
+
+        data.assigneeId = newAssigneeId;
+        data.status = 'TODO';
+        data.completionNote = null;
+        data.completedAt = null;
+        reassigned = true;
+      }
+    }
+
     // Replace subtasks if provided
     if (subtasks !== undefined) {
       await prisma.subtask.deleteMany({ where: { taskId: id } });
       data.subtasks = { create: subtasks.map((s, i) => ({ title: s.title, order: i })) };
+    } else if (reassigned && task.subtasks.length > 0) {
+      // Untick all subtasks on reassign
+      await prisma.subtask.updateMany({ where: { taskId: id }, data: { isDone: false } });
     }
 
     const updated = await prisma.task.update({ where: { id }, data, include: TASK_INCLUDE });
+
+    if (reassigned) {
+      await logActivity(id, req.user.id, 'REASSIGNED');
+    }
+
     return res.json({ task: updated });
   } catch (err) {
     console.error(err);

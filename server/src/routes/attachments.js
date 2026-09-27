@@ -38,7 +38,10 @@ const upload = multer({
 });
 
 // POST /api/tasks/:id/attachments
-// REFERENCE: task creator only; SUBMISSION: task assignee only
+// REFERENCE: task creator only; SUBMISSION: task assignee only.
+// Optional body field `batchId`: when present, the uploaded files are stored once
+// on disk and one Attachment row is created per task that shares that batchId
+// (REFERENCE only). The task in :id is used for permission checking.
 router.post(
   '/tasks/:id/attachments',
   authenticate,
@@ -57,7 +60,7 @@ router.post(
       const task = await prisma.task.findUnique({ where: { id: taskId } });
       if (!task) return res.status(404).json({ error: 'Task not found' });
 
-      const { kind } = req.body;
+      const { kind, batchId } = req.body;
       if (!kind || !['REFERENCE', 'SUBMISSION'].includes(kind)) {
         return res.status(400).json({ error: 'kind must be REFERENCE or SUBMISSION' });
       }
@@ -73,22 +76,40 @@ router.post(
         return res.status(400).json({ error: 'No files uploaded' });
       }
 
-      const created = await prisma.$transaction(
-        req.files.map((f) =>
-          prisma.attachment.create({
-            data: {
-              taskId,
-              fileName: f.originalname,
-              filePath: f.filename,
-              mimeType: f.mimetype,
-              size: f.size,
-              uploadedById: req.user.id,
-              kind,
-            },
-          }),
-        ),
-      );
+      // Determine which tasks to attach to (batch or single)
+      let targetTaskIds = [taskId];
+      if (batchId && kind === 'REFERENCE') {
+        const batchTasks = await prisma.task.findMany({
+          where: { batchId, createdById: req.user.id },
+          select: { id: true },
+        });
+        if (batchTasks.length > 0) {
+          targetTaskIds = batchTasks.map((t) => t.id);
+        }
+      }
 
+      // One Attachment row per file per target task; all rows for the same file
+      // share the same filePath so the physical file is stored only once.
+      const ops = [];
+      for (const f of req.files) {
+        for (const tid of targetTaskIds) {
+          ops.push(
+            prisma.attachment.create({
+              data: {
+                taskId: tid,
+                fileName: f.originalname,
+                filePath: f.filename,
+                mimeType: f.mimetype,
+                size: f.size,
+                uploadedById: req.user.id,
+                kind,
+              },
+            }),
+          );
+        }
+      }
+
+      const created = await prisma.$transaction(ops);
       return res.status(201).json({ attachments: created });
     } catch (err) {
       console.error(err);
@@ -124,6 +145,7 @@ router.get('/attachments/:id/download', authenticate, async (req, res) => {
 });
 
 // DELETE /api/attachments/:id — uploader only
+// Only removes the file from disk when no other Attachment row still references it.
 router.delete('/attachments/:id', authenticate, async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
@@ -133,10 +155,15 @@ router.delete('/attachments/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden: only the uploader can delete this attachment' });
     }
 
-    const filePath = path.join(UPLOAD_DIR, attachment.filePath);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-
     await prisma.attachment.delete({ where: { id } });
+
+    // Only unlink the physical file when no other Attachment row references the same path
+    const remaining = await prisma.attachment.count({ where: { filePath: attachment.filePath } });
+    if (remaining === 0) {
+      const filePath = path.join(UPLOAD_DIR, attachment.filePath);
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
+
     return res.json({ message: 'Attachment deleted' });
   } catch (err) {
     console.error(err);

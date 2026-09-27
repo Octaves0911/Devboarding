@@ -1,21 +1,20 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 4 (complete) | Next: Phase 5
+## Current Phase: 7 (complete) | Next: Phase 8
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
 - Phase 2: full REST API (users, tasks, subtasks, attachments, profile, activity logging)
 - Phase 3: frontend shell — landing, login, DashboardLayout, ProtectedRoute, 22 routes wired
 - Phase 4: Admin dashboard (all 7 tabs, fully functional)
-  - Shared components: Button, ConfirmModal, StatusBadge
-  - Overview: stat cards (users by role + tasks), recent-users table, click-to-navigate
-  - Users: table with search/role filter, View/Edit/Deactivate/Activate/Delete actions + confirmation modals
-  - Create User: form with conditional fields (designation for MENTOR, mentor dropdown for MENTEE), no-mentor warning + link
-  - Edit User: prefilled form, mentor reassignment for MENTEE, role shown read-only
-  - User Detail: profile info, mentor link for MENTEE, mentees list for MENTOR, tasks table
-  - All Tasks: read-only table, filters by status/creator/assignee, overdue badge
-  - My Profile: view info, edit name+phone, change password
-  - Mentor-with-mentees block: clear error shown on deactivate/delete attempt
+- Phase 5: Shared components + HR dashboard (fully functional)
+- Phase 6: Mentor dashboard (all tabs, fully functional)
+- Phase 7: Mentee dashboard (all tabs, fully functional)
+  - MenteeOverview: SVG progress ring (% done), status stat cards (todo/inprogress/done), next 3 upcoming due dates, overdue banner
+  - MenteeTasks: sub-tabs (All / Assigned by HR / Assigned by Mentor), status filter, table with subtask progress (e.g. 2/5), overdue badge, click → detail
+  - MenteeTaskDetail: TaskDetail with prevId/nextId navigation (Previous/Next buttons cycle through assigned tasks)
+  - MenteeMentor: mentor card (name, email, phone, designation, department)
+  - New API: GET /users/my-mentor (MENTEE only — returns own assigned mentor's details)
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)

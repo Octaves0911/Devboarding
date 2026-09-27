@@ -42,6 +42,7 @@ model Task {
   assignee       User      @relation("TaskAssignee", fields: [assigneeId], references: [id])
   completionNote String?
   completedAt    DateTime?
+  batchId        String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 

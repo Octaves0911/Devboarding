@@ -26,6 +26,22 @@ router.get('/users/mentors', authenticate, authorize('ADMIN', 'HR', 'MENTOR', 'M
   }
 });
 
+// GET /api/users/my-mentor — MENTEE: own assigned mentor
+router.get('/users/my-mentor', authenticate, authorize('MENTEE'), async (req, res) => {
+  try {
+    if (!req.user.mentorId) return res.status(404).json({ error: 'No mentor assigned' });
+    const mentor = await prisma.user.findUnique({
+      where: { id: req.user.mentorId },
+      select: { id: true, name: true, email: true, phone: true, department: true, designation: true },
+    });
+    if (!mentor) return res.status(404).json({ error: 'Mentor not found' });
+    return res.json({ mentor });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // GET /api/users/my-mentees — MENTOR: own mentees
 router.get('/users/my-mentees', authenticate, authorize('MENTOR'), async (req, res) => {
   try {

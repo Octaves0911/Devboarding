@@ -30,7 +30,7 @@ You are a senior full-stack engineer. Build a working prototype called "DevBorad
 
 # DATA MODEL
 User(id, name, email unique, passwordHash, role[ADMIN|HR|MENTOR|MENTEE], phone?, department?, designation?, joiningDate?, mentorId? -> User, isActive default true, createdAt)
-Task(id, title, description, priority[LOW|MEDIUM|HIGH], dueDate, status[TODO|IN_PROGRESS|DONE] default TODO, createdById -> User, assigneeId -> User, completionNote?, completedAt?, createdAt, updatedAt)
+Task(id, title, description, priority[LOW|MEDIUM|HIGH], dueDate, status[TODO|IN_PROGRESS|DONE] default TODO, createdById -> User, assigneeId -> User, completionNote?, completedAt?, batchId? (shared UUID when task is created for multiple assignees at once), createdAt, updatedAt)
 Subtask(id, taskId -> Task cascade, title, isDone default false, order)
 Attachment(id, taskId -> Task cascade, fileName, filePath, mimeType, size, uploadedById -> User, kind[REFERENCE|SUBMISSION], createdAt)
 TaskActivity(id, taskId -> Task cascade, userId -> User, action, fromStatus?, toStatus?, createdAt)
@@ -111,9 +111,14 @@ Tabs: Overview | My Tasks | My Mentor | My Profile
 
 ## TaskForm (create and edit)
 - Title* (max 120 chars), Description* (multiline, min 10 chars), Priority* (Low/Medium/High), Due date* (not in the past), Assignee*
+- Pressing Enter in any input field except the description textarea does NOT submit the form; submission is only via the Create / Save Changes button.
+- **Create mode — Assignees field:** scrollable checkbox list grouped by role (HR / Mentor / Mentee), with a search input above it. Each role group shows a "Select all / Deselect all" toggle. A count badge above the list shows how many assignees are selected. Clicking a name toggles it. At least one assignee must be selected.
+- **Edit mode — Assignee field:** same grouped layout but with radio buttons (single selection only).
+- **Multi-assign (create mode):** when more than one assignee is selected, `POST /tasks` sends `assigneeIds` (array of ints). The server validates every assignee against the creator's permission rules; if any fails all are rejected (403, nothing is created). On success, one task copy is created per assignee inside a single transaction, all sharing a `batchId` UUID. The response is `{ tasks, batchId }` for multi-assign and `{ task }` (backward-compatible) for single-assign. Any uploaded reference files are stored once on disk; one Attachment row per task copy points to the same `filePath`.
 - Subtasks: dynamic list, add/remove/reorder, each with a title
-- Attachments: drag-and-drop multi-file upload (kind = REFERENCE), show file name + size, remove before submit
-- Submit creates task + subtasks + attachments in one flow, logs TaskActivity "CREATED"
+- Attachments: drag-and-drop multi-file upload (kind = REFERENCE), show file name + size, remove before submit. On multi-assign, a single upload call (with the `batchId` in the form body) creates Attachment rows for every task copy without duplicating the file on disk.
+- Submit creates task(s) + subtasks + attachments in one flow, logs TaskActivity "CREATED" per task.
+- **Reassign (edit mode):** if the saved assigneeId differs from the current one the server resets `status` to TODO, unticks all subtasks, clears `completionNote` and `completedAt`, and logs a "REASSIGNED" TaskActivity entry.
 
 ## Task Detail (all roles)
 - Title, description, priority, due date, status badge, creator (name + role), assignee

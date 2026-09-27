@@ -1,4 +1,4 @@
-import Placeholder from '../../components/Placeholder';
+import ProfilePage from '../../components/ProfilePage';
 export default function MenteeProfile() {
-  return <Placeholder title="My Profile" description="View and edit your profile details here (Phase 7)." />;
+  return <ProfilePage />;
 }

@@ -25,16 +25,23 @@ import AdminProfile from './pages/admin/AdminProfile';
 import HROverview from './pages/hr/HROverview';
 import HRAssignTask from './pages/hr/HRAssignTask';
 import HRTasks from './pages/hr/HRTasks';
+import HRTaskDetail from './pages/hr/HRTaskDetail';
+import HRTaskEdit from './pages/hr/HRTaskEdit';
 import HRMyTasks from './pages/hr/HRMyTasks';
 import HRUsers from './pages/hr/HRUsers';
+import HRUserDetail from './pages/hr/HRUserDetail';
 import HRProfile from './pages/hr/HRProfile';
 
 // Mentor pages
 import MentorOverview from './pages/mentor/MentorOverview';
 import MentorMentees from './pages/mentor/MentorMentees';
+import MentorMenteeDetail from './pages/mentor/MentorMenteeDetail';
 import MentorAssignTask from './pages/mentor/MentorAssignTask';
 import MentorTasks from './pages/mentor/MentorTasks';
+import MentorTaskDetail from './pages/mentor/MentorTaskDetail';
+import MentorTaskEdit from './pages/mentor/MentorTaskEdit';
 import MentorMyTasks from './pages/mentor/MentorMyTasks';
+import MentorMyTaskDetail from './pages/mentor/MentorMyTaskDetail';
 import MentorProfile from './pages/mentor/MentorProfile';
 
 // Mentee pages
@@ -85,8 +92,11 @@ export default function App() {
             <Route index element={<HROverview />} />
             <Route path="tasks/new" element={<HRAssignTask />} />
             <Route path="tasks" element={<HRTasks />} />
+            <Route path="tasks/:id" element={<HRTaskDetail />} />
+            <Route path="tasks/:id/edit" element={<HRTaskEdit />} />
             <Route path="my-tasks" element={<HRMyTasks />} />
             <Route path="users" element={<HRUsers />} />
+            <Route path="users/:id" element={<HRUserDetail />} />
             <Route path="profile" element={<HRProfile />} />
           </Route>
 
@@ -101,9 +111,13 @@ export default function App() {
           >
             <Route index element={<MentorOverview />} />
             <Route path="mentees" element={<MentorMentees />} />
+            <Route path="mentees/:id" element={<MentorMenteeDetail />} />
             <Route path="tasks/new" element={<MentorAssignTask />} />
             <Route path="tasks" element={<MentorTasks />} />
+            <Route path="tasks/:id" element={<MentorTaskDetail />} />
+            <Route path="tasks/:id/edit" element={<MentorTaskEdit />} />
             <Route path="my-tasks" element={<MentorMyTasks />} />
+            <Route path="my-tasks/:id" element={<MentorMyTaskDetail />} />
             <Route path="profile" element={<MentorProfile />} />
           </Route>
 
