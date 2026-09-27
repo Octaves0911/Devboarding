@@ -14,6 +14,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { callLLM } = require('../lib/llm');
 const { logActivity } = require('../lib/activity');
+const { notify, taskLink, workspaceLink, statusLabel, aiReviewRecipientIds } = require('../lib/notify');
 
 const router = express.Router();
 
@@ -285,8 +286,13 @@ router.put('/workspaces/:taskId/file', authenticate, authorize('MENTEE'), async 
   // First save on a TODO task → IN_PROGRESS
   if (task.status === 'TODO') {
     await prisma.task.update({ where: { id: taskId }, data: { status: 'IN_PROGRESS' } });
-    const { logActivity } = require('../lib/activity');
     await logActivity(taskId, req.user.id, 'STATUS_CHANGED', 'TODO', 'IN_PROGRESS');
+    await notify([task.createdById], {
+      type: 'STATUS_CHANGED',
+      title: 'Task status changed',
+      body: `"${task.title}" is now ${statusLabel('IN_PROGRESS')}`,
+      link: (user) => taskLink(user, task),
+    }, req.user.id);
   }
 
   return res.json({ ok: true });
@@ -523,6 +529,19 @@ verdict must be exactly "PASS" or "FAIL". issues is empty array on PASS.`;
       await logActivity(taskId, req.user.id, 'AI_REVIEW_FAILED');
     }
 
+    await notify([task.createdById], {
+      type: 'SUBMISSION',
+      title: 'Workspace submitted for review',
+      body: task.title,
+      link: (user) => workspaceLink(user, task),
+    }, req.user.id);
+    await notify(await aiReviewRecipientIds(task, req.user.id), {
+      type: 'AI_REVIEW',
+      title: reviewData.verdict === 'PASS' ? 'AI review passed' : 'AI review failed',
+      body: `${task.title}: ${reviewData.summary}`,
+      link: (user) => workspaceLink(user, task),
+    }, req.user.id);
+
     return res.json({ review: { ...review, issues } });
   } finally {
     submitLocks.delete(taskId);
@@ -545,6 +564,12 @@ router.post('/workspaces/:taskId/approve', authenticate, authorize('MENTOR', 'HR
     data: { status: 'DONE', completedAt: new Date() },
   });
   await logActivity(taskId, req.user.id, 'APPROVED_BY_MENTOR', task.status, 'DONE');
+  await notify([task.assigneeId], {
+    type: 'STATUS_CHANGED',
+    title: 'Task status changed',
+    body: `"${task.title}" is now ${statusLabel('DONE')}`,
+    link: (user) => taskLink(user, task),
+  }, req.user.id);
 
   return res.json({ ok: true });
 });

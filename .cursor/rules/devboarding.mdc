@@ -1,0 +1,10 @@
+---
+description: DevBoarding project rules
+alwaysApply: true
+---
+- Project: DevBoarding. Stack and specs: docs/SPEC.md, docs/FEATURES-V2.md. Status: PROGRESS.md.
+- Write code directly to files. No explanations unless asked. After each task reply only: files changed, how to test.
+- Change only needed lines. Never rewrite whole files. Reuse existing components and helpers.
+- Enforce permissions on the server for every route.
+- Never read or print .env values.
+- Update PROGRESS.md after each phase.

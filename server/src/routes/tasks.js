@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { logActivity, canViewTask } = require('../lib/activity');
+const { notify, taskLink, listLink, statusLabel } = require('../lib/notify');
 const { randomUUID } = require('crypto');
 const {
   copyWorkspaceForTask,
@@ -209,6 +210,15 @@ router.post('/tasks', authenticate, authorize('HR', 'MENTOR'), async (req, res) 
       }
     }
 
+    for (const t of createdTasks) {
+      await notify([t.assigneeId], {
+        type: 'TASK_ASSIGNED',
+        title: 'New task assigned',
+        body: t.title,
+        link: (user) => taskLink(user, t),
+      }, req.user.id);
+    }
+
     // Return single task for single-assignee (backward compat), array for multi
     if (createdTasks.length === 1) {
       return res.status(201).json({ task: createdTasks[0] });
@@ -296,6 +306,19 @@ router.put('/tasks/:id', authenticate, authorize('HR', 'MENTOR'), async (req, re
           // Non-fatal: task is already reassigned
         }
       }
+
+      await notify([updated.assigneeId], {
+        type: 'TASK_REASSIGNED',
+        title: 'Task reassigned to you',
+        body: updated.title,
+        link: (user) => taskLink(user, updated),
+      }, req.user.id);
+      await notify([task.assigneeId], {
+        type: 'TASK_REASSIGNED',
+        title: 'Task reassigned',
+        body: `"${task.title}" is no longer assigned to you`,
+        link: (user) => listLink(user),
+      }, req.user.id);
     }
 
     return res.json({ task: updated });
@@ -367,6 +390,12 @@ router.patch('/tasks/:id/status', authenticate, authorize('HR', 'MENTOR', 'MENTE
 
     const updated = await prisma.task.update({ where: { id }, data, include: TASK_INCLUDE });
     await logActivity(id, req.user.id, 'STATUS_CHANGED', task.status, status);
+    await notify([task.createdById], {
+      type: 'STATUS_CHANGED',
+      title: 'Task status changed',
+      body: `"${updated.title}" is now ${statusLabel(status)}`,
+      link: (user) => taskLink(user, updated),
+    }, req.user.id);
     return res.json({ task: updated });
   } catch (err) {
     console.error(err);

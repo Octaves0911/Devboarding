@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
+import NotificationBell from '../components/NotificationBell';
 
 // ── Role colour palettes ──────────────────────────────────────────
 const ROLE_PALETTE = {
@@ -165,6 +166,8 @@ export default function DashboardLayout() {
 
           {/* Page title (filled by child pages via document.title or left blank) */}
           <div className="flex-1" />
+
+          <NotificationBell />
 
           {/* User area */}
           <div className="relative flex items-center gap-3">

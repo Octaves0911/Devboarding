@@ -8,6 +8,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const { callLLM } = require('../lib/llm');
 const prisma = require('../lib/prisma');
 const { logActivity } = require('../lib/activity');
+const { notify, taskLink } = require('../lib/notify');
 const { randomUUID } = require('crypto');
 const {
   copyWorkspaceForTask,
@@ -252,6 +253,15 @@ router.post(
           await prisma.task.deleteMany({ where: { id: { in: created.map((t) => t.id) } } });
           return res.status(500).json({ error: 'Failed to copy workspace. No tasks were created.' });
         }
+      }
+
+      for (const task of created) {
+        await notify([task.assigneeId], {
+          type: 'TASK_ASSIGNED',
+          title: 'New task assigned',
+          body: task.title,
+          link: (user) => taskLink(user, task),
+        }, req.user.id);
       }
 
       return res.status(201).json({ tasks: created, batchId });
