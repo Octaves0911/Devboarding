@@ -1,6 +1,6 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 12 (complete) | Next: Phase 13
+## Current Phase: 13 (complete) | Next: Phase 14
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
@@ -39,6 +39,13 @@
   - No-op hooks for Phases 13–14: onNewChatMessage, onMeetingRequest, onMeetingResponse, onMeetingCancel
   - GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, PATCH /notifications/read-all (own rows only)
   - Bell in dashboard top bar: unread badge, latest 10, click marks read and navigates, Mark all read, poll every 15s
+- Phase 13: Chat
+  - Conversation + ChatMessage models (userAId < userBId unique pair, readAt, cascade on user delete)
+  - allowedContacts(user): mentee ↔ own mentor and HR/Admin; mentor ↔ HR, Admin, and own mentees; HR and Admin ↔ every active user
+  - GET /chat/contacts (unread counts), POST /chat/conversations, GET and POST /chat/conversations/:id/messages
+  - Same allowedContacts check on list, open, read, and send; incoming messages marked read on fetch
+  - onNewChatMessage notifies the recipient via notify() with a role chat link
+  - Chat tab on every role sidebar: contact list, thread, input; poll every 5s; ?with= opens that contact
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)

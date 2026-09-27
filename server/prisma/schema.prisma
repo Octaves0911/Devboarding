@@ -25,9 +25,12 @@ model User {
 
   tasksCreated   Task[]           @relation("TaskCreator")
   tasksAssigned  Task[]           @relation("TaskAssignee")
-  attachments    Attachment[]
-  activities     TaskActivity[]
-  notifications  Notification[]
+  attachments       Attachment[]
+  activities        TaskActivity[]
+  notifications     Notification[]
+  conversationsAsA  Conversation[] @relation("ConvUserA")
+  conversationsAsB  Conversation[] @relation("ConvUserB")
+  chatMessages      ChatMessage[]
 }
 
 model Task {
@@ -101,6 +104,34 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, createdAt])
+}
+
+model Conversation {
+  id            Int       @id @default(autoincrement())
+  userAId       Int
+  userA         User      @relation("ConvUserA", fields: [userAId], references: [id], onDelete: Cascade)
+  userBId       Int
+  userB         User      @relation("ConvUserB", fields: [userBId], references: [id], onDelete: Cascade)
+  lastMessageAt DateTime?
+  messages      ChatMessage[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+}
+
+model ChatMessage {
+  id             Int          @id @default(autoincrement())
+  conversationId Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       Int
+  sender         User         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body           String
+  createdAt      DateTime     @default(now())
+  readAt         DateTime?
+
+  @@index([conversationId, createdAt])
+  @@index([conversationId, readAt])
 }
 
 model TaskActivity {
