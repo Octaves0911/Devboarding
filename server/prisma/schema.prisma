@@ -31,6 +31,8 @@ model User {
   conversationsAsA  Conversation[] @relation("ConvUserA")
   conversationsAsB  Conversation[] @relation("ConvUserB")
   chatMessages      ChatMessage[]
+  meetingsOrganized Meeting[]      @relation("MeetingsOrganized")
+  meetingsInvited   Meeting[]      @relation("MeetingsInvited")
 }
 
 model Task {
@@ -132,6 +134,24 @@ model ChatMessage {
 
   @@index([conversationId, createdAt])
   @@index([conversationId, readAt])
+}
+
+model Meeting {
+  id          Int      @id @default(autoincrement())
+  organizerId Int
+  organizer   User     @relation("MeetingsOrganized", fields: [organizerId], references: [id], onDelete: Cascade)
+  inviteeId   Int
+  invitee     User     @relation("MeetingsInvited", fields: [inviteeId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  meetingLink String?
+  startAt     DateTime
+  endAt       DateTime
+  status      String   @default("PENDING") // PENDING | ACCEPTED | DECLINED | CANCELLED
+
+  @@index([organizerId, startAt])
+  @@index([inviteeId, startAt])
+  @@index([inviteeId, status])
 }
 
 model TaskActivity {

@@ -1,6 +1,6 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 13 (complete) | Next: Phase 14
+## Current Phase: 14 (complete) | Next: Phase 15
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
@@ -46,6 +46,14 @@
   - Same allowedContacts check on list, open, read, and send; incoming messages marked read on fetch
   - onNewChatMessage notifies the recipient via notify() with a role chat link
   - Chat tab on every role sidebar: contact list, thread, input; poll every 5s; ?with= opens that contact
+- Phase 14: Calendar
+  - Meeting model + migration (organizer, invitee, title, description, link, start/end, PENDING | ACCEPTED | DECLINED | CANCELLED; cascade on user delete)
+  - Invitees limited to allowedContacts. Only the invitee can accept or decline; only the organizer can cancel
+  - endAt must be after startAt; startAt cannot be in the past (create and accept)
+  - GET /meetings, GET /meetings/contacts, GET /meetings/conflicts, POST /meetings, POST /meetings/:id/accept|decline|cancel
+  - Overlap check warns against the invitee's accepted meetings and still allows the request
+  - onMeetingRequest, onMeetingResponse, onMeetingCancel call notify() with a role calendar link
+  - Calendar tab for every role: month grid, upcoming list, pending Accept/Decline, organizer Cancel, request modal
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)

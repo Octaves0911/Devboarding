@@ -96,6 +96,21 @@ function chatLink(user, otherUserId) {
   return prefix ? `/${prefix}/chat?with=${otherUserId}` : null;
 }
 
+function calendarLink(user) {
+  const prefix = { ADMIN: 'admin', HR: 'hr', MENTOR: 'mentor', MENTEE: 'mentee' }[user.role];
+  return prefix ? `/${prefix}/calendar` : null;
+}
+
+function formatRange(startAt, endAt) {
+  if (!startAt || !endAt) return '';
+  const start = new Date(startAt);
+  const end = new Date(endAt);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '';
+  const day = start.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  const time = (d) => d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  return `${day}, ${time(start)} – ${time(end)}`;
+}
+
 /** Notify the recipient of a new chat message. No-op if the payload is incomplete. */
 async function onNewChatMessage(event) {
   if (!event?.recipientId || !event?.sender?.id || !event?.sender?.name) return;
@@ -108,10 +123,39 @@ async function onNewChatMessage(event) {
   }, event.sender.id);
 }
 
-// Hook point for Phase 14. No-op until that phase calls it.
-async function onMeetingRequest() {}
-async function onMeetingResponse() {}
-async function onMeetingCancel() {}
+async function onMeetingRequest(event) {
+  if (!event?.inviteeId || !event?.organizer?.id || !event?.organizer?.name || !event?.title) return;
+  const when = formatRange(event.startAt, event.endAt);
+  await notify([event.inviteeId], {
+    type: 'MEETING_REQUEST',
+    title: `Meeting request from ${event.organizer.name}`,
+    body: when ? `${event.title} · ${when}` : event.title,
+    link: (user) => calendarLink(user),
+  }, event.organizer.id);
+}
+
+async function onMeetingResponse(event) {
+  if (!event?.organizerId || !event?.invitee?.id || !event?.invitee?.name || !event?.title) return;
+  const accepted = event.status === 'ACCEPTED';
+  const when = formatRange(event.startAt, event.endAt);
+  await notify([event.organizerId], {
+    type: 'MEETING_RESPONSE',
+    title: `${event.invitee.name} ${accepted ? 'accepted' : 'declined'} your meeting`,
+    body: when ? `${event.title} · ${when}` : event.title,
+    link: (user) => calendarLink(user),
+  }, event.invitee.id);
+}
+
+async function onMeetingCancel(event) {
+  if (!event?.recipientId || !event?.actor?.id || !event?.actor?.name || !event?.title) return;
+  const when = formatRange(event.startAt, event.endAt);
+  await notify([event.recipientId], {
+    type: 'MEETING_CANCELLED',
+    title: `${event.actor.name} cancelled a meeting`,
+    body: when ? `${event.title} · ${when}` : event.title,
+    link: (user) => calendarLink(user),
+  }, event.actor.id);
+}
 
 module.exports = {
   notify,
