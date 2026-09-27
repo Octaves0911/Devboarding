@@ -1,0 +1,63 @@
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import api from '../../lib/api';
+import TaskForm from '../../components/TaskForm';
+
+export default function HRTaskEdit() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [task, setTask] = useState(null);
+  const [assignees, setAssignees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [taskRes, usersRes] = await Promise.all([
+          api.get(`/tasks/${id}`),
+          api.get('/users'),
+        ]);
+        setTask(taskRes.data.task);
+        setAssignees(
+          usersRes.data.users.filter((u) => u.isActive && ['HR', 'MENTOR', 'MENTEE'].includes(u.role))
+        );
+      } catch (err) {
+        setError(err.response?.data?.error ?? 'Failed to load task.');
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <svg className="animate-spin w-8 h-8 text-purple-500" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (error) return <div className="text-center py-16 text-red-600 text-sm">{error}</div>;
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <button onClick={() => navigate(`/hr/tasks/${id}`)} className="text-sm text-gray-500 hover:underline mb-1 block">
+          ← Back to task
+        </button>
+        <h1 className="text-xl font-bold text-gray-900">Edit Task</h1>
+      </div>
+      <TaskForm
+        task={task}
+        assignees={assignees}
+        onSuccess={() => navigate(`/hr/tasks/${id}`)}
+        onCancel={() => navigate(`/hr/tasks/${id}`)}
+      />
+    </div>
+  );
+}
