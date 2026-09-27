@@ -27,6 +27,7 @@ model User {
   tasksAssigned  Task[]           @relation("TaskAssignee")
   attachments    Attachment[]
   activities     TaskActivity[]
+  notifications  Notification[]
 }
 
 model Task {
@@ -85,6 +86,21 @@ model Review {
   summary    String
   issuesJson String   @default("[]")
   createdAt  DateTime @default(now())
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  body      String   @default("")
+  link      String?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }
 
 model TaskActivity {

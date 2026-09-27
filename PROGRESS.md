@@ -1,6 +1,6 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 11 (complete) | Next: Phase 12
+## Current Phase: 12 (complete) | Next: Phase 13
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
@@ -32,6 +32,13 @@
   - WorkspacePage: Submit for review button (disabled when not IN_PROGRESS or submitting), review result panel (PASS/FAIL, issues list, click-to-navigate to file+line), assistant chat (Enter to send, history in component state, read-only mode hides chat)
   - TaskDetail: Review History section (assignee + creator), Approve anyway button (creator + workspace + not DONE), new activityLabel entries
   - callLLM: temperature param added
+- Phase 12: Notifications
+  - Notification model + migration (userId, type, title, body, link, isRead, createdAt; cascade on user delete)
+  - notify(userIds, payload, exceptId) in server/src/lib/notify.js; failures are logged and do not fail the action
+  - Triggers: task assigned (tasks.js, ai.js), reassigned, status change (tasks.js, subtasks.js, workspaces.js first save + approve), subtask ticked, submission (attachments + workspace submit), AI review (creator and the mentee's mentor)
+  - No-op hooks for Phases 13–14: onNewChatMessage, onMeetingRequest, onMeetingResponse, onMeetingCancel
+  - GET /notifications, GET /notifications/unread-count, PATCH /notifications/:id/read, PATCH /notifications/read-all (own rows only)
+  - Bell in dashboard top bar: unread badge, latest 10, click marks read and navigates, Mark all read, poll every 15s
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)

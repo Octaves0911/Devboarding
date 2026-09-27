@@ -2,6 +2,7 @@ const express = require('express');
 const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { logActivity } = require('../lib/activity');
+const { notify, taskLink, statusLabel } = require('../lib/notify');
 
 const router = express.Router();
 
@@ -27,6 +28,15 @@ router.patch('/subtasks/:id/toggle', authenticate, authorize('HR', 'MENTOR', 'ME
       newIsDone ? 'SUBTASK_COMPLETED' : 'SUBTASK_UNCHECKED',
     );
 
+    if (newIsDone) {
+      await notify([subtask.task.createdById], {
+        type: 'SUBTASK_TICKED',
+        title: 'Subtask completed',
+        body: `"${subtask.title}" on ${subtask.task.title}`,
+        link: (user) => taskLink(user, subtask.task),
+      }, req.user.id);
+    }
+
     // If a subtask is unticked on a DONE task, revert task status to IN_PROGRESS
     if (!newIsDone && subtask.task.status === 'DONE') {
       await prisma.task.update({
@@ -34,6 +44,12 @@ router.patch('/subtasks/:id/toggle', authenticate, authorize('HR', 'MENTOR', 'ME
         data: { status: 'IN_PROGRESS', completedAt: null, completionNote: null },
       });
       await logActivity(subtask.taskId, req.user.id, 'STATUS_CHANGED', 'DONE', 'IN_PROGRESS');
+      await notify([subtask.task.createdById], {
+        type: 'STATUS_CHANGED',
+        title: 'Task status changed',
+        body: `"${subtask.task.title}" is now ${statusLabel('IN_PROGRESS')}`,
+        link: (user) => taskLink(user, subtask.task),
+      }, req.user.id);
     }
 
     return res.json({ subtask: updated });

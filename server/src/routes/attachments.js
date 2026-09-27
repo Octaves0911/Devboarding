@@ -5,6 +5,7 @@ const multer = require('multer');
 const { authenticate, authorize } = require('../middleware/auth');
 const prisma = require('../lib/prisma');
 const { canViewTask } = require('../lib/activity');
+const { notify, taskLink } = require('../lib/notify');
 
 const router = express.Router();
 
@@ -110,6 +111,17 @@ router.post(
       }
 
       const created = await prisma.$transaction(ops);
+
+      if (kind === 'SUBMISSION') {
+        const names = req.files.map((f) => f.originalname).join(', ');
+        await notify([task.createdById], {
+          type: 'SUBMISSION',
+          title: 'New submission',
+          body: `${names} on ${task.title}`,
+          link: (user) => taskLink(user, task),
+        }, req.user.id);
+      }
+
       return res.status(201).json({ attachments: created });
     } catch (err) {
       console.error(err);
