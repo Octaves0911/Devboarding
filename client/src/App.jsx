@@ -54,6 +54,7 @@ import MenteeProfile from './pages/mentee/MenteeProfile';
 // Workspace page
 import WorkspacePage from './pages/WorkspacePage';
 import ChatPage from './pages/ChatPage';
+import CalendarPage from './pages/CalendarPage';
 
 export default function App() {
   return (
@@ -82,6 +83,7 @@ export default function App() {
             <Route path="users/:id/edit" element={<AdminEditUser />} />
             <Route path="tasks" element={<AdminTasks />} />
             <Route path="chat" element={<ChatPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="workspace/:taskId" element={<WorkspacePage readOnly={true} />} />
             <Route path="profile" element={<AdminProfile />} />
           </Route>
@@ -103,6 +105,7 @@ export default function App() {
             <Route path="my-tasks" element={<HRMyTasks />} />
             <Route path="workspace/:taskId" element={<WorkspacePage readOnly={true} />} />
             <Route path="chat" element={<ChatPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="users" element={<HRUsers />} />
             <Route path="users/:id" element={<HRUserDetail />} />
             <Route path="profile" element={<HRProfile />} />
@@ -128,6 +131,7 @@ export default function App() {
             <Route path="my-tasks/:id" element={<MentorMyTaskDetail />} />
             <Route path="workspace/:taskId" element={<WorkspacePage readOnly={true} />} />
             <Route path="chat" element={<ChatPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="profile" element={<MentorProfile />} />
           </Route>
 
@@ -146,6 +150,7 @@ export default function App() {
             <Route path="workspace/:taskId" element={<WorkspacePage readOnly={false} />} />
             <Route path="mentor" element={<MenteeMentor />} />
             <Route path="chat" element={<ChatPage />} />
+            <Route path="calendar" element={<CalendarPage />} />
             <Route path="profile" element={<MenteeProfile />} />
           </Route>
 

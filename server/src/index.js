@@ -14,6 +14,7 @@ const aiRoutes = require('./routes/ai');
 const workspaceRoutes = require('./routes/workspaces');
 const notificationRoutes = require('./routes/notifications');
 const chatRoutes = require('./routes/chat');
+const meetingRoutes = require('./routes/meetings');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -39,6 +40,7 @@ app.use('/api', aiRoutes);
 app.use('/api', workspaceRoutes);
 app.use('/api', notificationRoutes);
 app.use('/api', chatRoutes);
+app.use('/api', meetingRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
