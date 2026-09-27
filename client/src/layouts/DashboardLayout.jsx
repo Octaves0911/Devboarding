@@ -14,6 +14,7 @@ import {
   X,
   ChevronDown,
   LogOut,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
@@ -34,6 +35,7 @@ const ROLE_TABS = {
     { label: 'Users',       to: '/admin/users',      icon: Users },
     { label: 'Create User', to: '/admin/users/new',  icon: UserPlus },
     { label: 'All Tasks',   to: '/admin/tasks',      icon: ClipboardList },
+    { label: 'Chat',        to: '/admin/chat',       icon: MessageSquare },
     { label: 'My Profile',  to: '/admin/profile',    icon: User },
   ],
   HR: [
@@ -42,6 +44,7 @@ const ROLE_TABS = {
     { label: 'Tasks Assigned by Me', to: '/hr/tasks',     icon: ListChecks },
     { label: 'My Tasks',             to: '/hr/my-tasks',  icon: CheckCircle2 },
     { label: 'Users',                to: '/hr/users',     icon: Users },
+    { label: 'Chat',                 to: '/hr/chat',      icon: MessageSquare },
     { label: 'My Profile',           to: '/hr/profile',   icon: User },
   ],
   MENTOR: [
@@ -50,12 +53,14 @@ const ROLE_TABS = {
     { label: 'Assign Task',          to: '/mentor/tasks/new', icon: PlusCircle },
     { label: 'Tasks Assigned by Me', to: '/mentor/tasks',     icon: ListChecks },
     { label: 'My Tasks',             to: '/mentor/my-tasks',  icon: CheckCircle2 },
+    { label: 'Chat',                 to: '/mentor/chat',      icon: MessageSquare },
     { label: 'My Profile',           to: '/mentor/profile',   icon: User },
   ],
   MENTEE: [
     { label: 'Overview',   to: '/mentee',          icon: LayoutDashboard, end: true },
     { label: 'My Tasks',   to: '/mentee/tasks',    icon: ListChecks },
     { label: 'My Mentor',  to: '/mentee/mentor',   icon: GraduationCap },
+    { label: 'Chat',       to: '/mentee/chat',     icon: MessageSquare },
     { label: 'My Profile', to: '/mentee/profile',  icon: User },
   ],
 };

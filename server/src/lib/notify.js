@@ -91,8 +91,24 @@ async function aiReviewRecipientIds(task, actorId) {
   return [...new Set(ids)];
 }
 
-// Hook points for Phases 13–14. No-ops until those phases call them.
-async function onNewChatMessage() {}
+function chatLink(user, otherUserId) {
+  const prefix = { ADMIN: 'admin', HR: 'hr', MENTOR: 'mentor', MENTEE: 'mentee' }[user.role];
+  return prefix ? `/${prefix}/chat?with=${otherUserId}` : null;
+}
+
+/** Notify the recipient of a new chat message. No-op if the payload is incomplete. */
+async function onNewChatMessage(event) {
+  if (!event?.recipientId || !event?.sender?.id || !event?.sender?.name) return;
+  const preview = String(event.body ?? '').replace(/\s+/g, ' ').trim().slice(0, 140);
+  await notify([event.recipientId], {
+    type: 'CHAT_MESSAGE',
+    title: `New message from ${event.sender.name}`,
+    body: preview,
+    link: (user) => chatLink(user, event.sender.id),
+  }, event.sender.id);
+}
+
+// Hook point for Phase 14. No-op until that phase calls it.
 async function onMeetingRequest() {}
 async function onMeetingResponse() {}
 async function onMeetingCancel() {}

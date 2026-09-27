@@ -13,6 +13,7 @@ const profileRoutes = require('./routes/profile');
 const aiRoutes = require('./routes/ai');
 const workspaceRoutes = require('./routes/workspaces');
 const notificationRoutes = require('./routes/notifications');
+const chatRoutes = require('./routes/chat');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -37,6 +38,7 @@ app.use('/api', profileRoutes);
 app.use('/api', aiRoutes);
 app.use('/api', workspaceRoutes);
 app.use('/api', notificationRoutes);
+app.use('/api', chatRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
