@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Paperclip, Download, Clock, ChevronLeft, ChevronRight, AlertTriangle, ExternalLink, FolderCode } from 'lucide-react';
+import { Paperclip, Download, Clock, ChevronLeft, ChevronRight, AlertTriangle, ExternalLink, FolderCode, CheckCircle, XCircle } from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
@@ -78,6 +78,9 @@ function activityLabel(act) {
     case 'STATUS_CHANGED': return `${who} changed status from ${act.fromStatus} to ${act.toStatus}`;
     case 'SUBTASK_COMPLETED': return `${who} completed a subtask`;
     case 'SUBTASK_UNCHECKED': return `${who} unchecked a subtask`;
+    case 'AI_REVIEW_PASSED': return `AI review passed — task marked as done`;
+    case 'AI_REVIEW_FAILED': return `AI review failed — issues found`;
+    case 'APPROVED_BY_MENTOR': return `${who} approved the task (override review)`;
     default: return `${who}: ${act.action}`;
   }
 }
@@ -127,6 +130,10 @@ export default function TaskDetail({
   const [submissionFiles, setSubmissionFiles] = useState([]);
   const [doneSubmitting, setDoneSubmitting] = useState(false);
 
+  // Reviews
+  const [reviews, setReviews] = useState([]);
+  const [approving, setApproving] = useState(false);
+
   const load = useCallback(async () => {
     if (!taskId) return;
     setLoading(true);
@@ -139,6 +146,14 @@ export default function TaskDetail({
     } finally {
       setLoading(false);
     }
+  }, [taskId]);
+
+  // Load reviews when taskId changes (only for workspace tasks)
+  useEffect(() => {
+    if (!taskId) return;
+    api.get(`/workspaces/${taskId}/reviews`)
+      .then((res) => setReviews(res.data.reviews ?? []))
+      .catch(() => {/* task may not have workspace */});
   }, [taskId]);
 
   useEffect(() => { load(); }, [load]);
@@ -253,6 +268,23 @@ export default function TaskDetail({
       toast.error(err.response?.data?.error ?? 'Failed to delete task.');
     } finally {
       setDeleting(false);
+    }
+  }
+
+  // ── Approve anyway (creator only) ───────────────────────────────
+
+  async function handleApprove() {
+    setApproving(true);
+    try {
+      await api.post(`/workspaces/${task.id}/approve`);
+      toast.success('Task approved and marked as done.');
+      await load();
+      const rev = await api.get(`/workspaces/${task.id}/reviews`);
+      setReviews(rev.data.reviews ?? []);
+    } catch (err) {
+      toast.error(err.response?.data?.error ?? 'Failed to approve task.');
+    } finally {
+      setApproving(false);
     }
   }
 
@@ -430,6 +462,52 @@ export default function TaskDetail({
         <div className="bg-green-50 border border-green-200 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-green-800 mb-1">Completion Note</h2>
           <p className="text-sm text-green-700 whitespace-pre-wrap">{task.completionNote}</p>
+        </div>
+      )}
+
+      {/* Approve anyway (creator only, workspace task, not yet DONE) */}
+      {isCreator && task.hasWorkspace && task.status !== 'DONE' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium text-gray-700">Override review</p>
+            <p className="text-xs text-gray-500">Mark this task as done without a passing AI review.</p>
+          </div>
+          <Button size="sm" variant="secondary" loading={approving} onClick={handleApprove}>
+            Approve anyway
+          </Button>
+        </div>
+      )}
+
+      {/* Review history (assignee or creator, workspace tasks) */}
+      {task.hasWorkspace && (isAssignee || isCreator) && reviews.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Review History</h2>
+          <ul className="space-y-3">
+            {reviews.map((rev) => (
+              <li key={rev.id} className={`rounded-lg border p-3 ${rev.verdict === 'PASS' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  {rev.verdict === 'PASS'
+                    ? <CheckCircle size={13} className="text-green-600 shrink-0" />
+                    : <XCircle size={13} className="text-red-600 shrink-0" />}
+                  <span className={`text-xs font-semibold ${rev.verdict === 'PASS' ? 'text-green-700' : 'text-red-700'}`}>
+                    {rev.verdict}
+                  </span>
+                  <span className="text-xs text-gray-400 ml-auto">{new Date(rev.createdAt).toLocaleString()}</span>
+                </div>
+                <p className="text-xs text-gray-700 mb-1">{rev.summary}</p>
+                {rev.issues?.length > 0 && (
+                  <ul className="mt-1 space-y-0.5">
+                    {rev.issues.map((issue, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-gray-600">
+                        <AlertTriangle size={10} className={`shrink-0 mt-0.5 ${issue.severity === 'error' ? 'text-red-500' : 'text-yellow-500'}`} />
+                        <span><span className="font-medium">{issue.file}{issue.line ? `:${issue.line}` : ''}</span> — {issue.message}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

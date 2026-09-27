@@ -39,13 +39,14 @@ function httpRequest(url, options, body, timeoutMs) {
 // ── callLLM ──────────────────────────────────────────────────────────────────
 /**
  * @param {object} opts
- * @param {string}  opts.system   - System prompt
- * @param {Array}   opts.messages - [{role,content}]
- * @param {boolean} [opts.json]   - If true, request JSON-only output
- * @param {number}  [opts.userId] - For rate limiting
+ * @param {string}  opts.system      - System prompt
+ * @param {Array}   opts.messages    - [{role,content}]
+ * @param {boolean} [opts.json]      - If true, request JSON-only output
+ * @param {number}  [opts.userId]    - For rate limiting
+ * @param {number}  [opts.temperature] - Sampling temperature (default: model default)
  * @returns {Promise<string|object>} Raw string, or parsed object when json=true
  */
-async function callLLM({ system, messages, json = false, userId }) {
+async function callLLM({ system, messages, json = false, userId, temperature }) {
   if (userId !== undefined && !checkRateLimit(userId)) {
     const err = new Error('AI rate limit exceeded — please wait a minute and try again.');
     err.status = 429;
@@ -66,6 +67,7 @@ async function callLLM({ system, messages, json = false, userId }) {
     messages: allMessages,
   };
   if (json) bodyObj.response_format = { type: 'json_object' };
+  if (temperature !== undefined) bodyObj.temperature = temperature;
 
   const bodyStr = JSON.stringify(bodyObj);
 

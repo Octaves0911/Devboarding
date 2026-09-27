@@ -51,6 +51,7 @@ model Task {
   subtasks    Subtask[]
   attachments Attachment[]
   activities  TaskActivity[]
+  reviews     Review[]
 }
 
 model Subtask {
@@ -74,6 +75,16 @@ model Attachment {
   uploadedBy   User     @relation(fields: [uploadedById], references: [id])
   kind         String   // REFERENCE | SUBMISSION
   createdAt    DateTime @default(now())
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  taskId     Int
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  verdict    String   // PASS | FAIL
+  summary    String
+  issuesJson String   @default("[]")
+  createdAt  DateTime @default(now())
 }
 
 model TaskActivity {

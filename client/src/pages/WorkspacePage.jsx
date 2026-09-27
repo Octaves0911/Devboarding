@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Editor from '@monaco-editor/react';
-import { ChevronLeft, ChevronDown, ChevronRight, FolderOpen, Folder, FileCode, Download, X, AlertCircle } from 'lucide-react';
+import {
+  ChevronLeft, ChevronDown, ChevronRight, FolderOpen, Folder, FileCode,
+  Download, X, Send, Loader2, CheckCircle, XCircle, AlertTriangle,
+} from 'lucide-react';
 import api from '../lib/api';
 import toast from 'react-hot-toast';
 import Button from '../components/Button';
@@ -85,6 +88,19 @@ export default function WorkspacePage({ readOnly = false }) {
   // Task panel
   const [panelOpen, setPanelOpen] = useState(true);
 
+  // ── Review state ─────────────────────────────────────────────────────────
+  const [submitting,   setSubmitting]   = useState(false);
+  const [lastReview,   setLastReview]   = useState(null); // { verdict, summary, issues, createdAt }
+
+  // ── Assistant state ──────────────────────────────────────────────────────
+  const [chatMessages,  setChatMessages]  = useState([]); // [{ role, content }]
+  const [chatInput,     setChatInput]     = useState('');
+  const [chatLoading,   setChatLoading]   = useState(false);
+  const chatEndRef = useRef(null);
+
+  // Monaco editor ref for line navigation
+  const editorRef = useRef(null);
+
   // Load task + tree
   const loadTree = useCallback(async () => {
     try {
@@ -103,28 +119,57 @@ export default function WorkspacePage({ readOnly = false }) {
 
   useEffect(() => { loadTree(); }, [loadTree]);
 
+  // Load latest review on mount
+  useEffect(() => {
+    if (!id) return;
+    api.get(`/workspaces/${id}/reviews`)
+      .then((res) => {
+        const reviews = res.data.reviews;
+        if (reviews?.length > 0) setLastReview(reviews[0]);
+      })
+      .catch(() => {/* ignore */});
+  }, [id]);
+
+  // Scroll chat to bottom when messages change
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [chatMessages, chatLoading]);
+
   // Open a file
-  async function openFile(path, name) {
+  async function openFile(filePath, name) {
     // Already open: just activate
-    const existing = tabs.find((t) => t.path === path);
-    if (existing) { setActiveTab(path); return; }
+    const existing = tabs.find((t) => t.path === filePath);
+    if (existing) { setActiveTab(filePath); return; }
 
     try {
-      const res = await api.get(`/workspaces/${id}/file`, { params: { path } });
+      const res = await api.get(`/workspaces/${id}/file`, { params: { path: filePath } });
       const content = res.data.content;
-      setTabs((prev) => [...prev, { path, name, content, original: content, dirty: false }]);
-      setActiveTab(path);
+      setTabs((prev) => [...prev, { path: filePath, name, content, original: content, dirty: false }]);
+      setActiveTab(filePath);
     } catch (err) {
       toast.error(err.response?.data?.error ?? 'Failed to open file.');
     }
   }
 
-  function closeTab(path, e) {
+  // Open file at a specific line (for issue navigation)
+  async function openFileAtLine(filePath, line) {
+    const name = filePath.split('/').pop();
+    await openFile(filePath, name);
+    if (line && editorRef.current) {
+      setTimeout(() => {
+        editorRef.current.revealLineInCenter(line);
+        editorRef.current.setPosition({ lineNumber: line, column: 1 });
+        editorRef.current.focus();
+      }, 150);
+    }
+  }
+
+  function closeTab(filePath, e) {
     e.stopPropagation();
-    const idx = tabs.findIndex((t) => t.path === path);
-    const newTabs = tabs.filter((t) => t.path !== path);
+    const idx = tabs.findIndex((t) => t.path === filePath);
+    const newTabs = tabs.filter((t) => t.path !== filePath);
     setTabs(newTabs);
-    if (activeTab === path) {
+    if (activeTab === filePath) {
       setActiveTab(newTabs[Math.max(0, idx - 1)]?.path ?? null);
     }
   }
@@ -171,8 +216,63 @@ export default function WorkspacePage({ readOnly = false }) {
     window.open(`/api/workspaces/${id}/download`, '_blank');
   }
 
-  const activeContent = tabs.find((t) => t.path === activeTab)?.content ?? '';
+  // ── Submit for review ────────────────────────────────────────────────────
+  async function handleSubmit() {
+    if (submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await api.post(`/workspaces/${id}/submit`);
+      const review = res.data.review;
+      setLastReview(review);
+      // Refresh task (status may have changed)
+      const taskRes = await api.get(`/tasks/${id}`);
+      setTask(taskRes.data.task);
+      if (review.verdict === 'PASS') {
+        toast.success('Review passed! Task marked as done.');
+      } else {
+        toast.error(`Review failed — ${review.issues?.length ?? 0} issue(s) found.`);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.error ?? 'Failed to submit for review.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ── Assistant chat ───────────────────────────────────────────────────────
+  async function sendChat() {
+    const text = chatInput.trim();
+    if (!text || chatLoading) return;
+    const newMessages = [...chatMessages, { role: 'user', content: text }];
+    setChatMessages(newMessages);
+    setChatInput('');
+    setChatLoading(true);
+    try {
+      const res = await api.post(`/workspaces/${id}/assistant`, {
+        messages: newMessages,
+        openFilePath: activeTab ?? undefined,
+      });
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: res.data.reply }]);
+    } catch (err) {
+      toast.error(err.response?.data?.error ?? 'Assistant unavailable.');
+      setChatMessages((prev) => prev.slice(0, -1)); // remove optimistic user msg
+      setChatInput(text);
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  function handleChatKeyDown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendChat();
+    }
+  }
+
+  const activeContent  = tabs.find((t) => t.path === activeTab)?.content ?? '';
   const activeFilename = tabs.find((t) => t.path === activeTab)?.name ?? '';
+
+  const canSubmit = !readOnly && task?.status === 'IN_PROGRESS' && !submitting;
 
   if (loading) {
     return (
@@ -210,6 +310,18 @@ export default function WorkspacePage({ readOnly = false }) {
           {!readOnly && (
             <Button size="sm" variant="secondary" onClick={saveCurrentFile} loading={saving} disabled={!tabs.find((t) => t.path === activeTab && t.dirty)}>
               Save
+            </Button>
+          )}
+          {!readOnly && (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={handleSubmit}
+              loading={submitting}
+              disabled={!canSubmit}
+              title={task.status !== 'IN_PROGRESS' ? 'Task must be IN_PROGRESS to submit' : ''}
+            >
+              {submitting ? 'Reviewing…' : 'Submit for review'}
             </Button>
           )}
           <Button size="sm" variant="secondary" onClick={handleDownload}>
@@ -276,6 +388,7 @@ export default function WorkspacePage({ readOnly = false }) {
                 language={getLanguage(activeFilename)}
                 value={activeContent}
                 onChange={onEditorChange}
+                onMount={(editor) => { editorRef.current = editor; }}
                 options={{
                   readOnly,
                   minimap: { enabled: false },
@@ -296,13 +409,13 @@ export default function WorkspacePage({ readOnly = false }) {
           </div>
         </div>
 
-        {/* Right placeholder (Phase 11 assistant) */}
-        <div className="w-64 shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col">
+        {/* Right panel — task info + review + assistant */}
+        <div className="w-72 shrink-0 border-l border-gray-200 bg-gray-50 flex flex-col overflow-hidden">
           {/* Task panel */}
           {panelOpen && (
-            <div className="border-b border-gray-200 p-3 space-y-2 overflow-y-auto max-h-64">
+            <div className="border-b border-gray-200 p-3 space-y-2 overflow-y-auto max-h-56 shrink-0">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Task</p>
-              <p className="text-xs text-gray-700 whitespace-pre-wrap line-clamp-6">{task.description}</p>
+              <p className="text-xs text-gray-700 whitespace-pre-wrap line-clamp-5">{task.description}</p>
               {task.subtasks?.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
@@ -322,11 +435,97 @@ export default function WorkspacePage({ readOnly = false }) {
               )}
             </div>
           )}
-          {/* Assistant placeholder */}
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 p-4">
-            <AlertCircle size={24} className="text-gray-200" />
-            <p className="text-xs text-gray-400 text-center">AI Assistant<br /><span className="text-gray-300">(Phase 11)</span></p>
-          </div>
+
+          {/* Last review result */}
+          {lastReview && (
+            <div className={`border-b p-3 shrink-0 ${lastReview.verdict === 'PASS' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                {lastReview.verdict === 'PASS'
+                  ? <CheckCircle size={13} className="text-green-600 shrink-0" />
+                  : <XCircle size={13} className="text-red-600 shrink-0" />}
+                <span className={`text-xs font-semibold ${lastReview.verdict === 'PASS' ? 'text-green-700' : 'text-red-700'}`}>
+                  Review {lastReview.verdict}
+                </span>
+              </div>
+              <p className="text-xs text-gray-700 mb-2 line-clamp-3">{lastReview.summary}</p>
+              {lastReview.issues?.length > 0 && (
+                <ul className="space-y-1">
+                  {lastReview.issues.map((issue, i) => (
+                    <li key={i}>
+                      <button
+                        className="w-full text-left text-xs px-2 py-1 rounded bg-white border border-red-200 hover:border-red-400 flex items-start gap-1.5"
+                        onClick={() => openFileAtLine(issue.file, issue.line)}
+                        title={`${issue.file}${issue.line ? `:${issue.line}` : ''}`}
+                      >
+                        <AlertTriangle size={10} className={`shrink-0 mt-0.5 ${issue.severity === 'error' ? 'text-red-500' : 'text-yellow-500'}`} />
+                        <span className="text-gray-700 line-clamp-2">{issue.message}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {/* Assistant chat */}
+          {!readOnly ? (
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-200 shrink-0">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">AI Assistant</p>
+                <p className="text-xs text-gray-400">Hints &amp; explanations only</p>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {chatMessages.length === 0 && (
+                  <p className="text-xs text-gray-400 text-center pt-4">Ask a question about your code or an error you're seeing.</p>
+                )}
+                {chatMessages.map((msg, i) => (
+                  <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[90%] px-2.5 py-1.5 rounded-lg text-xs whitespace-pre-wrap ${
+                      msg.role === 'user'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white border border-gray-200 text-gray-800'
+                    }`}>
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5">
+                      <Loader2 size={12} className="animate-spin text-gray-400" />
+                    </div>
+                  </div>
+                )}
+                <div ref={chatEndRef} />
+              </div>
+
+              {/* Input */}
+              <div className="shrink-0 border-t border-gray-200 p-2 flex gap-1.5 items-end">
+                <textarea
+                  rows={2}
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyDown={handleChatKeyDown}
+                  placeholder="Ask a question… (Enter to send)"
+                  className="flex-1 resize-none text-xs px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  disabled={chatLoading}
+                />
+                <button
+                  onClick={sendChat}
+                  disabled={!chatInput.trim() || chatLoading}
+                  className="shrink-0 p-1.5 rounded-lg bg-blue-600 text-white disabled:opacity-40 hover:bg-blue-700"
+                >
+                  <Send size={13} />
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 flex items-center justify-center p-4">
+              <p className="text-xs text-gray-400 text-center">Assistant not available in read-only mode.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

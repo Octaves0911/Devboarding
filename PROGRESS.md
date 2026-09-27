@@ -1,6 +1,6 @@
 # PROGRESS — DevBoarding
 
-## Current Phase: 10 (complete) | Next: Phase 11
+## Current Phase: 11 (complete) | Next: Phase 12
 
 ## Done
 - Phase 1: scaffold, Prisma schema, migration, seed, auth routes, JWT middleware
@@ -22,6 +22,16 @@
   - TaskDetail: "Open in Code Workspace" button when hasWorkspace
   - WorkspacePage: file tree, Monaco editor (local package, no CDN), file tabs, unsaved dot, Ctrl/Cmd+S, top bar, collapsible task panel, right assistant placeholder
   - Routes: /mentee/workspace/:taskId (writable), /mentor/workspace/:taskId, /hr/workspace/:taskId, /admin/workspace/:taskId (all read-only)
+- Phase 11: AI Code Review + Guarded Assistant
+  - Review model + migration (verdict, summary, issuesJson, cascades on Task delete)
+  - POST /workspaces/:taskId/submit: unified diff vs template, 40k-char cap, callLLM temperature=0, strict verdict validation (PASS/FAIL), in-memory concurrent-submit lock; PASS ticks subtasks + marks DONE + completionNote; FAIL logs AI_REVIEW_FAILED; 502 on invalid JSON
+  - POST /workspaces/:taskId/approve (creator only): ticks subtasks, marks DONE, logs APPROVED_BY_MENTOR
+  - GET /workspaces/:taskId/reviews: review history endpoint
+  - POST /workspaces/:taskId/assistant (assignee only): classifier pre-flight (temperature=0, isSolveRequest), fixed refusal string + hint on true; tutor system prompt with untrusted-data guardrail + refusal rule; last 10 messages; 30k-char file context with open-file priority
+  - Prompt injection: reviewer + assistant system prompts label file contents as untrusted data; file contents wrapped in <<<FILE:>>> delimiters
+  - WorkspacePage: Submit for review button (disabled when not IN_PROGRESS or submitting), review result panel (PASS/FAIL, issues list, click-to-navigate to file+line), assistant chat (Enter to send, history in component state, read-only mode hides chat)
+  - TaskDetail: Review History section (assignee + creator), Approve anyway button (creator + workspace + not DONE), new activityLabel entries
+  - callLLM: temperature param added
 
 ## Notes
 - Server runs on port 5001 (macOS Control Center holds 5000)
