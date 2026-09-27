@@ -172,11 +172,25 @@ npm run dev
 
 ### Test credentials
 
-| Role | Email | Password |
-|---|---|---|
-| Admin | admin@devboarding.com | Admin@123 |
+Password for every seeded user is `123456`.
 
-Log in as Admin to create HR, Mentor, and Mentee users. Running the test script also creates sample users with the password `Test@1234`.
+| Role | Name | Email |
+|---|---|---|
+| Admin | Kavya Menon | admin@devboarding.com |
+| HR | Rahul Mehta | rahul.mehta@devboarding.com |
+| HR | Neha Singh | neha.singh@devboarding.com |
+| Mentor | Arjun Kapoor | arjun.kapoor@devboarding.com |
+| Mentor | Priya Nair | priya.nair@devboarding.com |
+| Mentor | Vikram Iyer | vikram.iyer@devboarding.com |
+| Mentee | Aisha Khan | aisha.khan@devboarding.com |
+| Mentee | Dev Patel | dev.patel@devboarding.com |
+| Mentee | Kabir Shah | kabir.shah@devboarding.com |
+| Mentee | Sana Reddy | sana.reddy@devboarding.com |
+| Mentee | Rohan Das | rohan.das@devboarding.com |
+| Mentee | Meera Joshi | meera.joshi@devboarding.com |
+| Mentee | Ishaan Verma | ishaan.verma@devboarding.com |
+
+Running the permission test script creates extra users with the password `Test@1234`. Re-run the seed afterwards to restore this demo roster.
 
 ### Running the permission tests
 
